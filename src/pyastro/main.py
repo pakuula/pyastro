@@ -23,13 +23,26 @@ def to_roman(n: int) -> str:
 
 def main():
     # Пример использования
+    # dt_loc = DatetimeLocation(
+    #     datetime=datetime(
+    #         2001, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
+    #     ),  # 1 января 2001 года, полночь по Москве
+    #     location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
+    # )
+
+    # dt_loc = DatetimeLocation(
+    #     datetime=datetime(
+    #         1977, 6, 6, 9, 45, 0, tzinfo=ZoneInfo("Asia/Yekaterinburg")
+    #     ),
+    #     location=GeoPosition(latitude=57.248833, longitude=60.112745),  # Новоуральск
+    # )
+    # 
     dt_loc = DatetimeLocation(
         datetime=datetime(
-            2001, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
-        ),  # 1 января 2001 года, полночь по Москве
+            2025, 10, 1, 12, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
+        ),
         location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
     )
-
     chart = Chart(dt_loc)
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
     print(f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n")
