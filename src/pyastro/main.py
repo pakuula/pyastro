@@ -2,7 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from .astro import DatetimeLocation, GeoPosition, Angle, HouseSystem
+from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem
 
 def main():
     # Пример использования
@@ -10,11 +10,14 @@ def main():
         datetime=datetime(
             2001, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
         ),  # 1 января 2001 года, полночь по Москве
-        location=GeoPosition(latitude=55.7558, longitude=37.6176),  # Москва
+        location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
     )
 
+    chart = Chart(dt_loc)
+    print(f"Дата и время: {dt_loc.datetime.isoformat()}")
+    print(f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n")
     print("Позиции планет:")
-    for planet_pos in dt_loc.get_all_planet_positions():
+    for planet_pos in chart.planet_positions:
         print(
             f"{planet_pos.planet.name:10s}: "
             f"Долгота={Angle.Lon(planet_pos.longitude)}, "
@@ -34,6 +37,13 @@ def main():
             f"Угол={Angle(house_cusp.angle_in_sign)}"
         )
 
-
+    print("\nАспекты между планетами:")
+    for aspect in chart.aspects:
+        print(
+            f"{aspect.planet1.name} {aspect.planet1.symbol} - "
+            f"{aspect.planet2.name} {aspect.planet2.symbol}: "
+            f"{aspect.kind.name} {aspect.kind.symbol} {Angle(aspect.angle)} "
+            f"(oрб: {Angle(aspect.orb)})"
+        )
 if __name__ == "__main__":
     main()

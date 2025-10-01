@@ -1,3 +1,4 @@
+from itertools import combinations
 import os.path
 from dataclasses import dataclass
 from datetime import datetime
@@ -24,42 +25,34 @@ class GeoPosition:
 class Planet(Enum):
     """Идентификаторы планет, используются в Swiss Ephemeris."""
 
-    SUN = 0
-    MOON = 1
-    MERCURY = 2
-    VENUS = 3
-    MARS = 4
-    JUPITER = 5
-    SATURN = 6
-    URANUS = 7
-    NEPTUNE = 8
-    PLUTO = 9
-    # CHIRON = 15
-    NORTH_NODE = 10
-    # SOUTH_NODE = 11
+    SUN = (0, "☉")
+    MOON = (1, "☽")
+    MERCURY = (2, "☿")
+    VENUS = (3, "♀")
+    MARS = (4, "♂")
+    JUPITER = (5, "♃")
+    SATURN = (6, "♄")
+    URANUS = (7, "♅")
+    NEPTUNE = (8, "♆")
+    PLUTO = (9, "♇")
+    # CHIRON = (15, "⚷")
+    NORTH_NODE = (10, "☊")
+    # SOUTH_NODE = (11, "☋")
+
+    @property
+    def code(self) -> int:
+        """Возвращает идентификатор планеты, используемый в Swiss Ephemeris."""
+        return self.value[0]
 
     @property
     def symbol(self) -> str:
         """Возвращает символ планеты в юникоде."""
-        return _planet_symbols[self]
+        return self.value[1]
 
-
-_planet_symbols = {
-    Planet.SUN: "☉",
-    Planet.MOON: "☽",
-    Planet.MERCURY: "☿",
-    Planet.VENUS: "♀",
-    Planet.MARS: "♂",
-    Planet.JUPITER: "♃",
-    Planet.SATURN: "♄",
-    Planet.URANUS: "♅",
-    Planet.NEPTUNE: "♆",
-    Planet.PLUTO: "♇",
-    # Planet.CHIRON: "⚷",
-    Planet.NORTH_NODE: "☊",
-    # Planet.SOUTH_NODE: "☋",
-}
-
+    def __lt__(self, other):
+        if isinstance(other, Planet):
+            return self.code < other.code
+        return NotImplemented
 
 class HouseSystem(Enum):
     """Идентификаторы систем домов, используются в Swiss Ephemeris."""
@@ -99,30 +92,36 @@ _zodiac_symbols = [
 class ZodiacSign(Enum):
     """Знаки зодиака."""
 
-    ARIES = 0  # Овен
-    TAURUS = 1  # Телец
-    GEMINI = 2  # Близнецы
-    CANCER = 3  # Рак
-    LEO = 4  # Лев
-    VIRGO = 5  # Дева
-    LIBRA = 6  # Весы
-    SCORPIO = 7  # Скорпион
-    SAGITTARIUS = 8  # Стрелец
-    CAPRICORN = 9  # Козерог
-    AQUARIUS = 10  # Водолей
-    PISCES = 11  # Рыбы
+    ARIES = (0, "︎︎♈︎︎")  # Овен
+    TAURUS = (1, "︎︎♉︎︎")  # Телец
+    GEMINI = (2, "︎︎♊︎︎")  # Близнецы
+    CANCER = (3, "︎︎♋︎︎")  # Рак
+    LEO = (4, "︎︎♌︎︎")  # Лев
+    VIRGO = (5, "︎︎♍︎︎")  # Дева
+    LIBRA = (6, "︎︎♎︎︎")  # Весы
+    SCORPIO = (7, "︎︎♏︎︎")  # Скорпион
+    SAGITTARIUS = (8, "︎︎♐︎︎")  # Стрелец
+    CAPRICORN = (9, "︎︎♑︎︎")  # Козерог
+    AQUARIUS = (10, "︎︎♒︎︎")  # Водолей
+    PISCES = (11, "︎︎♓︎︎")  # Рыбы
 
     @classmethod
     def from_longitude(cls, longitude: float) -> tuple[Self, float]:
         """Создает ZodiacSign из долготы в градусах и угол в знаке."""
         longitude = longitude % 360
         index = int(longitude // 30)
-        return cls(index), longitude % 30
+        angle_in_sign = longitude % 30
+        return list(cls)[index], angle_in_sign
+
+    @property
+    def index(self) -> int:
+        """Возвращает индекс знака зодиака (0-11)."""
+        return self.value[0]
 
     @property
     def symbol(self) -> str:
         """Возвращает символ знака зодиака в юникоде."""
-        return _zodiac_symbols[self.value]
+        return self.value[1]
 
 
 @dataclass
@@ -198,7 +197,7 @@ class HousePosition:
     @property
     def zodiac_sign(self) -> ZodiacSign:
         """Знак зодиака, в котором находится куспид дома."""
-        return ZodiacSign(self.cusp_longitude // 30)
+        return ZodiacSign.from_longitude(self.cusp_longitude)[0]
 
     @property
     def angle_in_sign(self) -> float:
@@ -360,13 +359,17 @@ class DatetimeLocation:
     def get_planet_position(self, planet: Planet) -> tuple:
         """Возвращает позицию планеты в виде (долгота, широта, расстояние от Земли)."""
         jd = self.to_julian_day()
-        swe_data, _ = swe.calc_ut(jd, planet.value)
+        swe_data, _ = swe.calc_ut(jd, planet.code)
 
         return PlanetPosition.from_swe_data(planet, swe_data)
 
-    def get_all_planet_positions(self) -> list[PlanetPosition]:
+    def get_all_planet_positions(
+        self, planets: list[Planet] = None
+    ) -> list[PlanetPosition]:
         """Возвращает позиции всех планет."""
-        return [self.get_planet_position(planet) for planet in Planet]
+        if planets is None:
+            planets = list(Planet)
+        return [self.get_planet_position(planet) for planet in planets]
 
     def get_house_cusps(
         self, house_system: HouseSystem = HouseSystem.PLACIDUS
@@ -383,3 +386,138 @@ class DatetimeLocation:
             house_cusps.append(HousePosition.from_swe_data(i + 1, cusps[i], next_cusp))
 
         return house_cusps
+
+
+class AspectKind(Enum):
+    """Типы аспектов."""
+
+    CONJUNCTION = (0, "☌")  # Соединение (0°)
+    SEXTILE = (60, "⚹")  # Секстиль (60°)
+    SQUARE = (90, "□")  # Квадрат (90°)
+    TRINE = (120, "△")  # Трин (120°)
+    OPPOSITION = (180, "☍")  # Оппозиция (180°)
+
+    @property
+    def angle(self) -> float:
+        """Возвращает угол аспекта в градусах."""
+        return self.value[0]
+
+    @property
+    def symbol(self) -> str:
+        """Возвращает символ аспекта."""
+        return self.value[1]
+
+
+DEFAULT_ORB = 6.0  # стандартная орбисность для аспектов в градусах
+ASPECT_ORBS = {
+    AspectKind.CONJUNCTION: 8.0,
+    AspectKind.SEXTILE: 6.0,
+    AspectKind.SQUARE: 6.0,
+    AspectKind.TRINE: 6.0,
+    AspectKind.OPPOSITION: 8.0,
+}
+
+
+@dataclass
+class Aspect:
+    """Аспект между планетами."""
+
+    planet1: Planet
+    planet2: Planet
+    angle: float  # угол между планетами в градусах
+    kind: AspectKind  # тип аспекта
+    max_orb: float  # допустимый орбис аспекта в градусах, заданный при создании карты
+
+    def __post_init__(self):
+        self.angle = self.angle % 360
+        if self.angle > 180:
+            self.angle = 360 - self.angle  # аспект всегда от 0 до 180 градусов
+        if self.max_orb < 0:
+            raise ValueError(f"Orb must be non-negative, got {self.max_orb}")
+        if self.orb > self.max_orb:
+            raise ValueError(
+                f"Angle {self.angle} is out of orb {self.max_orb} for aspect type {self.kind}"
+            )
+
+    @property
+    def orb(self) -> float:
+        """Возвращает текущий орбис аспекта."""
+        return abs(self.angle - self.kind.angle)
+
+    @classmethod
+    def aspect_or_none(
+        cls,
+        planet1: PlanetPosition,
+        planet2: PlanetPosition,
+        aspect_type: AspectKind,
+        max_orb: float = DEFAULT_ORB,
+    ) -> Self | None:
+        """Возвращает аспект между двумя планетами или None, если аспекта нет."""
+        angle = abs(planet1.longitude - planet2.longitude) % 360
+        if angle > 180:
+            angle = 360 - angle
+        if abs(angle - aspect_type.angle) > max_orb:
+            return None
+        return cls(
+            planet1=planet1.planet,
+            planet2=planet2.planet,
+            angle=angle,
+            kind=aspect_type,
+            max_orb=max_orb,
+        )
+
+class AspectList(list[Aspect]):
+    """Список аспектов с дополнительными методами."""
+
+    def by_type(self, aspect_type: AspectKind) -> Self:
+        """Возвращает список аспектов заданного типа."""
+        return AspectList([aspect for aspect in self if aspect.kind == aspect_type])
+
+    def by_planet(self, planet: Planet) -> Self:
+        """Возвращает список аспектов, в которых участвует заданная планета."""
+        return AspectList([
+            aspect
+            for aspect in self
+            if aspect.planet1 == planet or aspect.planet2 == planet
+        ])
+    
+    def sorted_by_planets(self) -> Self:
+        """Возвращает список аспектов, отсортированный по именам планет."""
+        return AspectList(sorted(self, key=lambda aspect: (aspect.planet1, aspect.planet2)))
+    def sorted_by_kind_and_planets(self) -> Self:
+        """Возвращает список аспектов, отсортированный по типу аспекта и именам планет."""
+        return AspectList(sorted(self, key=lambda aspect: (aspect.kind.value[0], aspect.planet1, aspect.planet2)))
+
+def get_aspects(
+    planet_positions: list[PlanetPosition],
+    aspect_types: list[AspectKind] = None,
+    max_orbs: dict[AspectKind, float] = None,
+) -> AspectList:
+    """Возвращает список аспектов между планетами."""
+    if aspect_types is None:
+        aspect_types = list(AspectKind)
+    if max_orbs is None:
+        max_orbs = ASPECT_ORBS
+
+    aspects = AspectList()
+
+    for p1, p2 in combinations(planet_positions, 2):
+        for aspect_type in aspect_types:
+            max_orb = max_orbs.get(aspect_type, DEFAULT_ORB)
+            aspect = Aspect.aspect_or_none(
+                p1, p2, aspect_type, max_orb=max_orb
+            )
+            if aspect is not None:
+                aspects.append(aspect)
+    return aspects
+
+
+class Chart:
+    """Астрологическая карта, включающая позиции планет, куспиды домов и аспекты."""
+    def __init__(self, dt_loc: DatetimeLocation, house_system: HouseSystem = HouseSystem.PLACIDUS):
+        self.dt_loc = dt_loc
+        self.house_system = house_system
+        
+        self.planet_positions = self.dt_loc.get_all_planet_positions()
+        self.houses = self.dt_loc.get_house_cusps(self.house_system)
+        self.aspects = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
