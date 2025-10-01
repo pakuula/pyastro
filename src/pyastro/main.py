@@ -3,6 +3,8 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem
+from .rendering import chart_to_svg, SvgTheme
+
 
 def main():
     # Пример использования
@@ -45,5 +47,14 @@ def main():
             f"{aspect.kind.name} {aspect.kind.symbol} {Angle(aspect.angle)} "
             f"(oрб: {Angle(aspect.orb)})"
         )
+
+    # Экспортируем SVG
+    svg = chart_to_svg(chart, SvgTheme())
+    svg_path = "chart.svg"
+    with open(svg_path, "w", encoding="utf-8") as f:
+        f.write(svg)
+    print(f"\nSVG сохранён в {svg_path}")
+
+
 if __name__ == "__main__":
     main()
