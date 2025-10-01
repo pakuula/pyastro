@@ -1,9 +1,0 @@
-pyproject.toml
-src/pyastro/main.py
-src/pyastro.egg-info/PKG-INFO
-src/pyastro.egg-info/SOURCES.txt
-src/pyastro.egg-info/dependency_links.txt
-src/pyastro.egg-info/entry_points.txt
-src/pyastro.egg-info/requires.txt
-src/pyastro.egg-info/top_level.txt
-src/pyastro/astro/__init__.py
