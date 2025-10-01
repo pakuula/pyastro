@@ -2,3 +2,4 @@
 __pycache__/
 /*.svg
 /src/pyastro.egg-info/
+*.png
