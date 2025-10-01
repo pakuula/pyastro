@@ -1,0 +1,2 @@
+[console_scripts]
+pyastro = pyastro.main:main
