@@ -1,0 +1,16 @@
+{
+    "name": "Владимир Вольфович Жириновский",
+    "event": {
+        "kind": "birth",
+        "datetime": {
+            "date": "1946-04-25",
+            "time": "23:00:00",
+            "time_zone": "Asia/Almaty"
+        },
+        "location": {
+            "place": "Алма-Ата, Казахстан",
+            "latitude": 43.2380,
+            "longitude": 76.8829
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "name": "Мэрилин Монро",
+    "event": {
+        "kind": "birth",
+        "datetime": {
+            "date": "1926-06-01",
+            "time": "09:30:00",
+            "time_zone": "-08:00"
+        },
+        "location": {
+            "place": "Лос-Анджелес, Калифорния, США",
+            "latitude": "34 15' N",
+            "longitude": "118 15' W"
+        }
+    }
+}
