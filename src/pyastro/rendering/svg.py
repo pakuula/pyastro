@@ -38,7 +38,7 @@ class SvgTheme:
     house_num_font_size: int = 12
     house_num_color: str = "#555"
     # Сдвиг нижнего индекса домов (относительно базовой линии номера). Отрицательный % поднимает.
-    house_subscript_baseline_shift: str = "-35%"  # чтобы baseline номера примерно проходила через центр индекса
+    house_subscript_baseline_shift: str = "sub"  # чтобы baseline номера примерно проходила через центр индекса
     aspect_colors: dict[AspectKind, str] = None
     aspect_width: float = 1.6
     tick_length: float = 6.0
@@ -76,7 +76,7 @@ class SvgTheme:
     planet_base_point_stroke: str = "#000000"
     planet_base_point_stroke_width: float = 0.6
     # Масштаб нижних индексов (subscripts) относительно основного размера символа
-    subscript_scale: float = 1.0
+    subscript_scale: float = 0.66
     # Коэффициент радиуса внешнего кольца зодиака относительно внешнего радиуса домов
     zodiac_outer_ratio: float = 0.86  # было 0.93; меньше -> шире кольцо домов
     # Смещения подписей домов, чтобы не пересекать линии куспидов
@@ -169,13 +169,13 @@ def _distribute_cluster(cluster, base_angle: float, base_r: float, max_allowed_r
     return result
 
 
-def _layout_planets(chart: Chart, base_symbol_r: float, zodiac_r_inner: float, theme: SvgTheme) -> dict[Planet, tuple[float, float]]:
+def _layout_planets(chart: Chart, base_symbol_r: float, zodiac_r_inner: float, theme: SvgTheme, rotation: float = 0.0) -> dict[Planet, tuple[float, float]]:
     clusters = _cluster_planet_positions(chart, theme.min_planet_separation_deg)
     layout: dict[Planet, tuple[float, float]] = {}
     max_allowed = zodiac_r_inner - theme.planet_font_size * 0.65
     for cluster in clusters:
         # базовый угол — средний (с учётом wrap modulo 360? упрощённо берем первого)
-        base_angle = cluster[0].longitude
+        base_angle = (cluster[0].longitude + rotation) % 360
         distributed = _distribute_cluster(cluster, base_angle, base_symbol_r, max_allowed, theme)
         for planet, ang, r in distributed:
             layout[planet] = (ang, r)
@@ -214,9 +214,15 @@ def _conjunction_components(chart: Chart) -> list[list[Planet]]:
     return comps
 
 
-def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
+def chart_to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> str:
+    """Возвращает SVG строку натальной карты.
+
+    angle: на сколько градусов ПОВЕРНУТЬ КОЛЬЦО ЗНАКОВ ЗОДИАКА ПРОТИВ часовой стрелки (только фоновые сектора, символы знаков и граничные 30° тики). Планеты, дома и аспекты остаются в гео-долготах без сдвига.
+    """
     if theme is None:
         theme = SvgTheme()
+    ring_angle_offset = angle % 360.0  # полный поворот диаграммы CCW
+    rot = ring_angle_offset
 
     w, h = theme.width, theme.height
     cx, cy = w / 2, h / 2
@@ -228,7 +234,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
 
     planet_positions = chart.planet_positions
     planet_xy_base: dict[Planet, tuple[float, float]] = {
-        pp.planet: polar(cx, cy, planet_r, pp.longitude) for pp in planet_positions
+        pp.planet: polar(cx, cy, planet_r, (pp.longitude + rot) % 360) for pp in planet_positions
     }
 
     out: list[str] = []
@@ -238,7 +244,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
 
     # Zodiac ring sectors CCW
     for i in range(12):
-        start_angle = i * 30
+        start_angle = i * 30 + ring_angle_offset
         end_angle = start_angle + 30
         x1o, y1o = polar(cx, cy, zodiac_r_outer, start_angle)
         x2o, y2o = polar(cx, cy, zodiac_r_outer, end_angle)
@@ -256,21 +262,22 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
     # Zodiac signs glyphs
     zodiac_enum = planet_positions[0].zodiac_sign.__class__ if planet_positions else []
     for i, sign in enumerate(zodiac_enum):
-        mid_angle = i * 30 + 15
+        mid_angle = i * 30 + 15 + ring_angle_offset
         tx, ty = polar(cx, cy, (zodiac_r_outer + zodiac_r_inner)/2, mid_angle)
         ap(f'<text x="{tx:.2f}" y="{ty:.2f}" font-size="{theme.sign_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{theme.sign_color}">{sign.symbol}</text>')
 
     # Houses outer circle and segmented cusps
     ap(f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="{theme.circle_stroke_width}" />')
     for house in chart.houses:
-        ang = house.cusp_longitude
+        ang = (house.cusp_longitude + rot) % 360
         xpi, ypi = polar(cx, cy, planet_r, ang)
         xzi, yzi = polar(cx, cy, zodiac_r_inner, ang)
         ap(f'<line x1="{xpi:.2f}" y1="{ypi:.2f}" x2="{xzi:.2f}" y2="{yzi:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />')
         xzo, yzo = polar(cx, cy, zodiac_r_outer, ang)
         xho, yho = polar(cx, cy, houses_r_outer, ang)
         ap(f'<line x1="{xzo:.2f}" y1="{yzo:.2f}" x2="{xho:.2f}" y2="{yho:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />')
-        deg_sub = int_to_subscript(round(house.angle_in_sign))
+        # реальный угол в знаке без учёта поворота (оставляем физическое значение 0..29)
+        deg_sub = round(house.cusp_longitude % 30)
         label = (
             f"{to_roman(house.house_number)}"
             f"<tspan font-size='{theme.house_num_font_size * theme.subscript_scale:.0f}' "
@@ -295,7 +302,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
     # Sign boundary ticks on planet_r (inward)
     tick_r_inner = max(planet_r - theme.tick_length, 0)
     for k in range(12):
-        ang = k * 30
+        ang = (k * 30 + rot) % 360
         x1, y1 = polar(cx, cy, planet_r, ang)
         x2, y2 = polar(cx, cy, tick_r_inner, ang)
         ap(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.tick_color}" stroke-width="{theme.tick_width}" stroke-linecap="round" stroke-opacity="{theme.tick_opacity}" />')
@@ -303,7 +310,8 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
     # Внутреннее тонкое кольцо и 10° насечки в образованном кольце (planet_r - tick_limb_width .. planet_r)
     limb_r = max(planet_r - theme.tick_limb_width, 0)
     ap(f'<circle cx="{cx}" cy="{cy}" r="{limb_r:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="0.4" stroke-opacity="0.6" />')
-    for ang in range(0, 360, 10):
+    for base_ang in range(0, 360, 10):
+        ang = (base_ang + rot) % 360
         x1, y1 = polar(cx, cy, planet_r, ang)
         x2, y2 = polar(cx, cy, limb_r, ang)
         ap(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.tick_color}" stroke-width="0.5" stroke-opacity="0.65" />')
@@ -329,7 +337,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
 
     # Planet symbols with improved collision avoidance (angular fan + optional radial slight staggering)
     base_symbol_r = min(planet_r + theme.planet_symbol_offset, zodiac_r_inner - theme.planet_font_size * 0.65)
-    layout = _layout_planets(chart, base_symbol_r, zodiac_r_inner, theme)
+    layout = _layout_planets(chart, base_symbol_r, zodiac_r_inner, theme, rotation=rot)
 
     # Дуги соединений по окружности planet_r
     if theme.highlight_conjunctions:
@@ -352,7 +360,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
                 return best[0] % 360, best[1] % 360
             arc_r = max(planet_r - theme.conjunction_arc_inner_inset, 0)
             for comp in comps:
-                base_angles = [pp.longitude % 360 for pp in planet_positions if pp.planet in comp]
+                base_angles = [((pp.longitude + rot) % 360) for pp in planet_positions if pp.planet in comp]
                 if len(base_angles) < 2:
                     continue
                 start_a, end_a = cluster_span(base_angles)
@@ -374,9 +382,9 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
                 path = f"M {sx:.2f} {sy:.2f} A {arc_r:.2f} {arc_r:.2f} 0 {large_arc} 0 {ex:.2f} {ey:.2f}"
                 ap(f'<path d="{path}" stroke="{theme.conjunction_highlight_color}" stroke-width="{theme.conjunction_arc_stroke_width}" fill="none" stroke-linecap="round" />')
     for pp in planet_positions:
-        ang, sr = layout.get(pp.planet, (pp.longitude, base_symbol_r))
+        ang, sr = layout.get(pp.planet, ((pp.longitude + rot) % 360, base_symbol_r))
         sx, sy = polar(cx, cy, sr, ang)
-        deg_sub = int_to_subscript(round(pp.angle_in_sign()))
+        deg_sub = round(pp.angle_in_sign())
         ap(f'<text x="{sx:.2f}" y="{sy:.2f}" font-size="{theme.planet_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{theme.planet_color}">{pp.planet.symbol}<tspan font-size="{theme.planet_font_size * theme.subscript_scale:.0f}" baseline-shift="sub">{deg_sub}</tspan></text>')
     # Базовые точки планет поверх линий аспектов (перенесено вниз)
     if theme.show_planet_base_points:
@@ -387,4 +395,17 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None) -> str:
     ap('</svg>')
     return "\n".join(out)
 
-__all__ = ["SvgTheme", "chart_to_svg"]
+def compute_angle_for_asc(chart: Chart) -> float:
+    """Вычисляет угол поворота кольца зодиака, чтобы асцендент (дом 1) был слева (9 часов).
+
+    Возвращает угол в градусах CCW.
+    """
+    asc_cusp = next((h for h in chart.houses if h.house_number == 1), None)
+    if not asc_cusp:
+        return 0.0
+    asc_angle = asc_cusp.cusp_longitude % 360
+    # Нужно повернуть так, чтобы asc_angle оказался на 180° (9 часов)
+    rotation = (180.0 - asc_angle) % 360.0
+    return rotation
+
+__all__ = ["SvgTheme", "chart_to_svg", "compute_angle_for_asc"] 
