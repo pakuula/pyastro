@@ -2,7 +2,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from pyastro.rendering.svg import compute_angle_for_asc
+from pyastro.rendering.svg import asc_to_angle
 
 from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem
 from .rendering import chart_to_svg, SvgTheme
@@ -95,7 +95,7 @@ def main():
         )
 
     # Экспортируем SVG
-    svg = chart_to_svg(chart, SvgTheme(), angle=compute_angle_for_asc(chart))
+    svg = chart_to_svg(chart, SvgTheme(), angle=asc_to_angle(chart, 180))
     svg_path = "chart.svg"
     with open(svg_path, "w", encoding="utf-8") as f:
         f.write(svg)

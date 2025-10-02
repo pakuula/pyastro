@@ -395,8 +395,8 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
     ap('</svg>')
     return "\n".join(out)
 
-def compute_angle_for_asc(chart: Chart) -> float:
-    """Вычисляет угол поворота кольца зодиака, чтобы асцендент (дом 1) был слева (9 часов).
+def asc_to_angle(chart: Chart, target: float) -> float:
+    """Вычисляет угол поворота кольца зодиака, чтобы асцендент (дом 1) оказался на заданном направлении target (в градусах, 0°=3 часа, CCW).
 
     Возвращает угол в градусах CCW.
     """
@@ -404,8 +404,8 @@ def compute_angle_for_asc(chart: Chart) -> float:
     if not asc_cusp:
         return 0.0
     asc_angle = asc_cusp.cusp_longitude % 360
-    # Нужно повернуть так, чтобы asc_angle оказался на 180° (9 часов)
-    rotation = (180.0 - asc_angle) % 360.0
+    # Нужно повернуть так, чтобы asc_angle оказался на target
+    rotation = (target - asc_angle) % 360.0
     return rotation
 
-__all__ = ["SvgTheme", "chart_to_svg", "compute_angle_for_asc"] 
+__all__ = ["SvgTheme", "chart_to_svg", "asc_to_angle"] 
