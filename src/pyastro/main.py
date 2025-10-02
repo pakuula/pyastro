@@ -2,6 +2,8 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from pyastro.rendering.svg import compute_angle_for_asc
+
 from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem
 from .rendering import chart_to_svg, SvgTheme
 
@@ -21,6 +23,21 @@ def to_roman(n: int) -> str:
     return _ROMAN.get(n, str(n))
 
 
+inputs = {
+    "Жириновский": DatetimeLocation(
+        datetime=datetime(1946, 4, 25, 23, 00, tzinfo=ZoneInfo("Asia/Almaty")),
+        location=GeoPosition(latitude=43.2380, longitude=76.8829),  # Алматы
+    ),
+    "Монро": DatetimeLocation(
+        datetime=datetime(1926, 6, 1, 9, 30, tzinfo=ZoneInfo("America/Los_Angeles")),
+        location=GeoPosition(latitude=34.0522, longitude=-118.2437),  # Лос-Анджелес
+    ),
+    "я" : DatetimeLocation(
+        datetime=datetime(1977,6,4, 9, 45, tzinfo=ZoneInfo("Asia/Yekaterinburg")),
+        location=GeoPosition(latitude=57.248833, longitude=60.0889),  # Новоуральск
+    )
+}
+
 def main():
     # Пример использования
     # dt_loc = DatetimeLocation(
@@ -37,12 +54,9 @@ def main():
     #     location=GeoPosition(latitude=57.248833, longitude=60.112745),  # Новоуральск
     # )
     # 
-    dt_loc = DatetimeLocation(
-        datetime=datetime(
-            2025, 10, 1, 12, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
-        ),
-        location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
-    )
+    # dt_loc = inputs["Жириновский"]
+    # dt_loc = inputs["Монро"]
+    dt_loc = inputs["я"]
     chart = Chart(dt_loc)
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
     print(f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n")
@@ -81,7 +95,7 @@ def main():
         )
 
     # Экспортируем SVG
-    svg = chart_to_svg(chart, SvgTheme())
+    svg = chart_to_svg(chart, SvgTheme(), angle=compute_angle_for_asc(chart))
     svg_path = "chart.svg"
     with open(svg_path, "w", encoding="utf-8") as f:
         f.write(svg)
