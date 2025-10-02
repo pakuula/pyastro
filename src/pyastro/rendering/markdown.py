@@ -1,6 +1,7 @@
 """Модуль для генерации markdown отчётов по астрологическим картам"""
 
 from pyastro.astro import Angle, Chart
+from pyastro.util import Latitude, Longitude
 
 
 def to_markdown(chart: Chart, svg_path: str) -> str:
@@ -26,8 +27,8 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
     para("# Астрологическая карта")
     para(
         f"- Имя: {chart.name}",
-        f"- Дата и время: {chart.dt_loc.datetime.isoformat()}",
-        f"- Местоположение: широта={chart.dt_loc.location.latitude}, долгота={chart.dt_loc.location.longitude}",
+        f"- Дата и время: {chart.dt_loc.datetime.strftime('%Y-%m-%d %H:%M:%S')} ({chart.dt_loc.datetime.tzinfo})",
+        f"- Местоположение: {Latitude(chart.dt_loc.location.latitude)} {Longitude(chart.dt_loc.location.longitude)}",
     )
     if svg_path:
         para(f"![Карта гороскопа]({svg_path})")

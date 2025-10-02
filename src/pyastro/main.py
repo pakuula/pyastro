@@ -10,6 +10,7 @@ from pyastro.rendering.svg import Shift, asc_to_angle
 
 from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem, Planet
 from .rendering import chart_to_svg, SvgTheme
+from .util import CoordError, parse_lat, parse_lon
 
 # Helper to convert integer to Unicode subscript digits (0-29)
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -145,14 +146,21 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     if not "name" in json_data:
         raise ValueError("JSON должен содержать поле 'name'")
     name = json_data["name"]
-    if not "datetime" in json_data:
+    if not isinstance(name, str):
+        raise ValueError("JSON поле 'name' должно быть строкой")
+    if not "event" in json_data:
+        raise ValueError("JSON должен содержать поле 'event'")
+    event_data = json_data["event"]
+    if not isinstance(event_data, dict):
+        raise ValueError("JSON поле 'event' должно быть объектом")
+    if not "datetime" in event_data:
         raise ValueError("JSON должен содержать поле 'datetime'")
-    dt = parse_json_datetime(json_data["datetime"])
-    if not "location" in json_data:
+    dt = parse_json_datetime(event_data["datetime"])
+    if not "location" in event_data:
         raise ValueError("JSON должен содержать поле 'location'")
-    loc = parse_json_location(json_data["location"])
+    loc = parse_json_location(event_data["location"])
     extra = {
-        k: v for k, v in json_data.items() if k not in ("name", "datetime", "location")
+        k: v for k, v in json_data.items() if k not in ("name", "event")
     }
     return name, DatetimeLocation(datetime=dt, location=loc), extra
 
@@ -186,7 +194,7 @@ def datetime_from_str(date_str: str, time_str: str, tz_str: str) -> datetime:
             hours_offset, minutes_offset = map(int, tz_str.split(":"))
             tzinfo = timezone(
                 offset=timedelta(hours=hours_offset, minutes=minutes_offset),
-                name=f"UTC{'+' if hours_offset < 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
+                name=f"GMT{'+' if hours_offset > 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
             )
         else:
             tzinfo = ZoneInfo(tz_str)
@@ -211,18 +219,33 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
     Возможные форматы:
     - число с плавающей точкой, например 55.7558, -37.6173
     """
-    try:
+    if isinstance(lat_str, str):
+        try:
+            latitude = parse_lat(lat_str)
+        except CoordError as e:
+            raise ValueError(
+                f"Неверный формат широты: {lat_str}"
+            ) from e
+    elif isinstance(lat_str, (int, float)):
         latitude = float(lat_str)
-    except ValueError as e:
-        raise ValueError(
-            f"Неверный формат широты, ожидается число с плавающей точкой: {lat_str}"
-        ) from e
-    try:
+        if not (-90.0 <= latitude <= 90.0):
+            raise ValueError(f"Широта вне диапазона [-90, 90]: {latitude}")
+    else:
+        raise ValueError(f"Неверный тип широты: {type(lat_str)}")
+
+    if isinstance(lon_str, str):
+        try:
+            longitude = parse_lon(lon_str)
+        except CoordError as e:
+            raise ValueError(
+                f"Неверный формат долготы: {lon_str}"
+            ) from e
+    elif isinstance(lon_str, (int, float)):
         longitude = float(lon_str)
-    except ValueError as e:
-        raise ValueError(
-            f"Неверный формат долготы, ожидается число с плавающей точкой: {lon_str}"
-        ) from e
+        if not (-180.0 <= longitude <= 180.0):
+            raise ValueError(f"Долгота вне диапазона [-180, 180]: {longitude}")
+    else:
+        raise ValueError(f"Неверный тип долготы: {type(lon_str)}")
 
     return GeoPosition(latitude=latitude, longitude=longitude)
 

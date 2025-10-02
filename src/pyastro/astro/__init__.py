@@ -279,13 +279,17 @@ class Angle:
             min = int((self.value - deg) * 60)
             sec = ((self.value - deg) * 60 - min) * 60
         else:
-            sign = "+" if self.value >= 0 else "-"
+            sign = "-" if self.value < 0 else ""
             abs_value = abs(self.value)
             deg = int(abs_value)
             min = int((abs_value - deg) * 60)
             sec = ((abs_value - deg) * 60 - min) * 60
-        sec_str = format(sec, format_spec) if format_spec else f"{sec:.0f}"
-        return f"{sign}{deg}°{min}'{sec_str}\""
+        if format_spec:
+            # Форматирование с плавающей точкой для секунд
+            sec_str = format(sec, format_spec) if format_spec else f"{sec:.0f}"
+        else:
+            sec_str = f"{round(sec):02d}" # Округление до целого числа секунд
+        return f"{sign}{deg}°{min:02d}'{sec_str}\""
 
     @classmethod
     def from_str(cls, angle_str: str, from_0_to_360: bool = False) -> Self:
