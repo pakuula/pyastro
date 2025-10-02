@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 import json
 from zoneinfo import ZoneInfo
 
+from pyastro.rendering import pdf
 from pyastro.rendering.markdown import to_markdown
 from pyastro.rendering.svg import Shift, asc_to_angle
 
@@ -134,6 +135,8 @@ def process_data(
     with open(mdown_path, "w", encoding="utf-8") as f:
         f.write(mdown)
     print(f"Markdown сохранён в {mdown_path}")
+    
+    pdf.to_pdf(mdown_path, f"{output_name}.pdf")
 
 
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
