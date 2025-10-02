@@ -514,7 +514,8 @@ def get_aspects(
 
 class Chart:
     """Астрологическая карта, включающая позиции планет, куспиды домов и аспекты."""
-    def __init__(self, dt_loc: DatetimeLocation, house_system: HouseSystem = HouseSystem.PLACIDUS):
+    def __init__(self, name: str, dt_loc: DatetimeLocation, house_system: HouseSystem = HouseSystem.PLACIDUS):
+        self.name = name
         self.dt_loc = dt_loc
         self.house_system = house_system
         
