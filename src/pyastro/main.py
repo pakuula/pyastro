@@ -50,26 +50,7 @@ inputs = {
     ),
 }
 
-
-def main():
-    # Пример использования
-    # dt_loc = DatetimeLocation(
-    #     datetime=datetime(
-    #         2001, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
-    #     ),  # 1 января 2001 года, полночь по Москве
-    #     location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
-    # )
-
-    # dt_loc = DatetimeLocation(
-    #     datetime=datetime(
-    #         1977, 6, 6, 9, 45, 0, tzinfo=ZoneInfo("Asia/Yekaterinburg")
-    #     ),
-    #     location=GeoPosition(latitude=57.248833, longitude=60.112745),  # Новоуральск
-    # )
-    #
-    # dt_loc = inputs["Жириновский"]
-    # dt_loc = inputs["Монро"]
-    dt_loc = inputs["я"]
+def process_data(dt_loc: DatetimeLocation, name: str = "chart", no_png: bool =True):
     chart = Chart(dt_loc)
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
     print(
@@ -115,28 +96,108 @@ def main():
         SvgTheme(manual_shifts={Planet.VENUS: Shift(dr=10), Planet.MARS: Shift(dr=-5)}),
         angle=asc_to_angle(chart, 180),
     )
-    svg_path = "chart.svg"
+    svg_path = f"{name}.svg"
     with open(svg_path, "w", encoding="utf-8") as f:
         f.write(svg)
     print(f"\nSVG сохранён в {svg_path}")
 
     # Генерация PNG из SVG
-    png_path = "chart.png"
-    try:
-        import cairosvg  # type: ignore
-    except ImportError as e:  # pragma: no cover
-        print(f"Не установлен cairosvg, пропуск PNG: {e}")
-    else:
+    if not no_png:
+        png_path = f"{name}.png"
         try:
-            cairosvg.svg2png(
-                bytestring=svg.encode("utf-8"),
-                write_to=png_path,
-                output_width=1600,
-                output_height=1600,
-            )
-            print(f"PNG сохранён в {png_path}")
-        except (ValueError, OSError) as e:  # pragma: no cover
-            print(f"Ошибка конвертации PNG: {e}")
+            import cairosvg  # type: ignore
+        except ImportError as e:  # pragma: no cover
+            print(f"Не установлен cairosvg, пропуск PNG: {e}")
+        else:
+            try:
+                cairosvg.svg2png(
+                    bytestring=svg.encode("utf-8"),
+                    write_to=png_path,
+                    output_width=1600,
+                    output_height=1600,
+                )
+                print(f"PNG сохранён в {png_path}")
+            except (ValueError, OSError) as e:  # pragma: no cover
+                print(f"Ошибка конвертации PNG: {e}")
+            
+def main():
+    """
+    Главная функция для запуска астрологических расчётов и генерации графики.
+    
+    Параметры командной строки:
+    -n --name NAME - имя. Нужно сгенерировать вывод NAME.svg, NAME.png (потом добавятся другие виды выводов)
+    -l --location местоположение в формате LAT,LON где LAT широта, float, LON долгота float
+    -d --date дата в формате YYYY-MM-DD
+    -t --time время в формате H:M:S 
+    -z --time-zone часовй пояс в формате Europe/Moscow ЛИБО смещение от гринвича в формате -08:00
+    --png генерировать PNG, по умолчанию False
+    """
+    import argparse
+    parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
+    parser.add_argument("-n", "--name", type=str, required=True, help="Имя для файлов вывода (без расширения)")
+    parser.add_argument("-l", "--location", type=str, required=True, help="Местоположение в формате LAT,LON (широта, долгота)")
+    parser.add_argument("-d", "--date", type=str, required=True, help="Дата в формате YYYY-MM-DD")
+    parser.add_argument("-t", "--time", type=str, required=True, help="Время в формате H:M:S")
+    parser.add_argument("-z", "--time-zone", type=str, required=True, help="Часовой пояс в формате Europe/Moscow или смещение от гринвича в формате -08:00")
+    parser.add_argument("--png", action="store_true", help="Генерировать PNG (по умолчанию False)")
+    args = parser.parse_args()
+    
+    try:
+        lat_str, lon_str = args.location.split(",")
+    except ValueError:
+        print(f"Ошибка: местоположение должно быть в формате LAT,LON: {args.location}")
+        return
+    try:
+        latitude = float(lat_str)
+        longitude = float(lon_str)
+    except ValueError:
+        print(f"Ошибка: широта и долгота должны быть числами с плавающей точкой: {lat_str}, {lon_str}")
+        return
+    try:
+        date = datetime.strptime(args.date, "%Y-%m-%d").date()
+    except ValueError:
+        print(f"Ошибка: дата должна быть в формате YYYY-MM-DD: {args.date}")
+        return
+    try:
+        time = datetime.strptime(args.time, "%H:%M:%S").time()
+    except ValueError:
+        print(f"Ошибка: время должно быть в формате H:M:S: {args.time}")
+        return
+    try:
+        if args.time_zone.startswith(("+", "-")):
+            hours_offset, minutes_offset = map(int, args.time_zone.split(":"))
+            tzinfo = ZoneInfo(f"Etc/GMT{'+' if hours_offset < 0 else '-'}{abs(hours_offset)}")
+        else:
+            tzinfo = ZoneInfo(args.time_zone)
+    except Exception as e:
+        print(f"Ошибка: неверный часовой пояс: {args.time_zone}: {e}")
+        return
+    
+    dt = datetime.combine(date, time, tzinfo=tzinfo)
+    location = GeoPosition(latitude=latitude, longitude=longitude)
+    dt_loc = DatetimeLocation(datetime=dt, location=location)
+    process_data(dt_loc, name=args.name, no_png=not args.png)
+    
+def main0():
+    # Пример использования
+    # dt_loc = DatetimeLocation(
+    #     datetime=datetime(
+    #         2001, 1, 1, 0, 0, 0, tzinfo=ZoneInfo("Europe/Moscow")
+    #     ),  # 1 января 2001 года, полночь по Москве
+    #     location=GeoPosition(latitude=55.75, longitude=37.35),  # Москва
+    # )
+
+    # dt_loc = DatetimeLocation(
+    #     datetime=datetime(
+    #         1977, 6, 6, 9, 45, 0, tzinfo=ZoneInfo("Asia/Yekaterinburg")
+    #     ),
+    #     location=GeoPosition(latitude=57.248833, longitude=60.112745),  # Новоуральск
+    # )
+    #
+    # dt_loc = inputs["Жириновский"]
+    # dt_loc = inputs["Монро"]
+    dt_loc = inputs["я"]
+    process_data(dt_loc, name="я", no_png=False)
 
 
 if __name__ == "__main__":
