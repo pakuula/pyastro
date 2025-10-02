@@ -35,7 +35,7 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
     para("## Позиции планет")
 
     headers = [
-        "Планета",
+        # "Планета",
         "Символ",
         "Долгота",
         "Широта",
@@ -48,11 +48,11 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
 
     for planet_pos in chart.planet_positions:
         planet_data = [
-            f"{planet_pos.planet.name}",
+            # f"{planet_pos.planet.name}",
             f"{planet_pos.planet.symbol}",
             f"{Angle.Lon(planet_pos.longitude)}",
             f"{Angle.Lat(planet_pos.latitude)}",
-            f"{planet_pos.zodiac_sign.name}",
+            f"{planet_pos.zodiac_sign.symbol}",
             f"{Angle(planet_pos.angle_in_sign())}",
             "Да" if planet_pos.is_retrograde() else "Нет",
         ]
@@ -70,7 +70,7 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
             f"{house.house_number}",
             f"{Angle.Lon(house.cusp_longitude)}",
             f"{Angle(house.length)}",
-            f"{house.zodiac_sign.name}",
+            f"{house.zodiac_sign.symbol}",
             f"{Angle(house.angle_in_sign)}",
         ]
         writeln("| " + " | ".join(house_data) + " |")

@@ -75,7 +75,7 @@ def process_data(
             f"{planet_pos.planet.symbol}{deg_sub} "
             f"Долгота={Angle.Lon(planet_pos.longitude)}, "
             f"Широта={Angle.Lat(planet_pos.latitude)}, "
-            f"знак={planet_pos.zodiac_sign.name}, "
+            f"знак={planet_pos.zodiac_sign.symbol}, "
             f"угол в знаке={Angle(planet_pos.angle_in_sign())}, "
             f"Ретроградность={'Да' if planet_pos.is_retrograde() else 'Нет'}"
         )
@@ -135,11 +135,13 @@ def process_data(
     with open(mdown_path, "w", encoding="utf-8") as f:
         f.write(mdown)
     print(f"Markdown сохранён в {mdown_path}")
-    
+
     pdf.to_pdf(mdown_path, f"{output_name}.pdf")
 
 
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
+    """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
+
     if not "name" in json_data:
         raise ValueError("JSON должен содержать поле 'name'")
     name = json_data["name"]
@@ -156,6 +158,8 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
 
 
 def parse_json_datetime(dt_json: dict) -> datetime:
+    """Разбор JSON datetime в объект datetime"""
+
     if not "date" in dt_json:
         raise ValueError("JSON datetime должен содержать поле 'date'")
     if not "time" in dt_json:
@@ -166,14 +170,17 @@ def parse_json_datetime(dt_json: dict) -> datetime:
 
 
 def datetime_from_str(date_str: str, time_str: str, tz_str: str) -> datetime:
+    """Разбор строки даты, времени и часового пояса в объект datetime"""
     try:
         date = datetime.fromisoformat(date_str).date()
-    except ValueError:
-        raise ValueError(f"Неверный формат даты, ожидается ISO 8601: {date_str}")
+    except ValueError as e:
+        raise ValueError(f"Неверный формат даты, ожидается ISO 8601: {date_str}") from e
     try:
         time = datetime.strptime(time_str, "%H:%M:%S").time()
-    except ValueError:
-        raise ValueError(f"Неверный формат времени, ожидается ISO 8601: {time_str}")
+    except ValueError as e:
+        raise ValueError(
+            f"Неверный формат времени, ожидается ISO 8601: {time_str}"
+        ) from e
     try:
         if tz_str.startswith(("+", "-")):
             hours_offset, minutes_offset = map(int, tz_str.split(":"))
@@ -184,11 +191,13 @@ def datetime_from_str(date_str: str, time_str: str, tz_str: str) -> datetime:
         else:
             tzinfo = ZoneInfo(tz_str)
     except Exception as e:
-        raise ValueError(f"Неверный часовой пояс: {tz_str}: {e}")
+        raise ValueError(f"Неверный часовой пояс: {tz_str}: {e}") from e
     return datetime.combine(date, time, tzinfo=tzinfo)
 
 
 def parse_json_location(loc_json: dict) -> GeoPosition:
+    """Разбор JSON location в объект GeoPosition"""
+
     if not "latitude" in loc_json:
         raise ValueError("JSON location должен содержать поле 'latitude'")
     if not "longitude" in loc_json:
@@ -197,18 +206,24 @@ def parse_json_location(loc_json: dict) -> GeoPosition:
 
 
 def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
+    """Разбор строки широты и долготы в объект GeoPosition.
+    
+    Возможные форматы:
+    - число с плавающей точкой, например 55.7558, -37.6173
+    """
     try:
         latitude = float(lat_str)
-    except ValueError:
+    except ValueError as e:
         raise ValueError(
             f"Неверный формат широты, ожидается число с плавающей точкой: {lat_str}"
-        )
+        ) from e
     try:
         longitude = float(lon_str)
-    except ValueError:
+    except ValueError as e:
         raise ValueError(
             f"Неверный формат долготы, ожидается число с плавающей точкой: {lon_str}"
-        )
+        ) from e
+
     return GeoPosition(latitude=latitude, longitude=longitude)
 
 

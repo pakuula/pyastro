@@ -272,7 +272,7 @@ class Angle:
     def __repr__(self) -> str:
         return f"Angle({self.value}, from_0_to_360={self.from_0_to_360})"
 
-    def __str__(self) -> str:
+    def __format__(self, format_spec: str) -> str:
         if self.from_0_to_360:
             sign = ""
             deg = int(self.value)
@@ -284,7 +284,8 @@ class Angle:
             deg = int(abs_value)
             min = int((abs_value - deg) * 60)
             sec = ((abs_value - deg) * 60 - min) * 60
-        return f'''{sign}{deg}°{min}'{sec:.2f}"'''
+        sec_str = format(sec, format_spec) if format_spec else f"{sec:.0f}"
+        return f"{sign}{deg}°{min}'{sec_str}\""
 
     @classmethod
     def from_str(cls, angle_str: str, from_0_to_360: bool = False) -> Self:
