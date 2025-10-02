@@ -2,22 +2,34 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from pyastro.rendering.svg import asc_to_angle
+from pyastro.rendering.svg import Shift, asc_to_angle
 
-from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem
+from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem, Planet
 from .rendering import chart_to_svg, SvgTheme
 
 # Helper to convert integer to Unicode subscript digits (0-29)
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 
 _ROMAN = {
-    1: "I", 2: "II", 3: "III", 4: "IV", 5: "V", 6: "VI",
-    7: "VII", 8: "VIII", 9: "IX", 10: "X", 11: "XI", 12: "XII"
+    1: "I",
+    2: "II",
+    3: "III",
+    4: "IV",
+    5: "V",
+    6: "VI",
+    7: "VII",
+    8: "VIII",
+    9: "IX",
+    10: "X",
+    11: "XI",
+    12: "XII",
 }
+
 
 def int_to_subscript(n: int) -> str:
     n = n % 30
     return str(n).translate(_SUB_MAP)
+
 
 def to_roman(n: int) -> str:
     return _ROMAN.get(n, str(n))
@@ -32,11 +44,12 @@ inputs = {
         datetime=datetime(1926, 6, 1, 9, 30, tzinfo=ZoneInfo("America/Los_Angeles")),
         location=GeoPosition(latitude=34.0522, longitude=-118.2437),  # Лос-Анджелес
     ),
-    "я" : DatetimeLocation(
-        datetime=datetime(1977,6,4, 9, 45, tzinfo=ZoneInfo("Asia/Yekaterinburg")),
+    "я": DatetimeLocation(
+        datetime=datetime(1977, 6, 4, 9, 45, tzinfo=ZoneInfo("Asia/Yekaterinburg")),
         location=GeoPosition(latitude=57.248833, longitude=60.0889),  # Новоуральск
-    )
+    ),
 }
+
 
 def main():
     # Пример использования
@@ -53,13 +66,15 @@ def main():
     #     ),
     #     location=GeoPosition(latitude=57.248833, longitude=60.112745),  # Новоуральск
     # )
-    # 
+    #
     # dt_loc = inputs["Жириновский"]
     # dt_loc = inputs["Монро"]
     dt_loc = inputs["я"]
     chart = Chart(dt_loc)
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
-    print(f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n")
+    print(
+        f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n"
+    )
     print("Позиции планет:")
     for planet_pos in chart.planet_positions:
         deg_sub = int_to_subscript(round(planet_pos.angle_in_sign()))
@@ -95,7 +110,11 @@ def main():
         )
 
     # Экспортируем SVG
-    svg = chart_to_svg(chart, SvgTheme(), angle=asc_to_angle(chart, 180))
+    svg = chart_to_svg(
+        chart,
+        SvgTheme(manual_shifts={Planet.VENUS: Shift(dr=10), Planet.MARS: Shift(dr=-5)}),
+        angle=asc_to_angle(chart, 180),
+    )
     svg_path = "chart.svg"
     with open(svg_path, "w", encoding="utf-8") as f:
         f.write(svg)
@@ -109,7 +128,12 @@ def main():
         print(f"Не установлен cairosvg, пропуск PNG: {e}")
     else:
         try:
-            cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=png_path, output_width=1600, output_height=1600)
+            cairosvg.svg2png(
+                bytestring=svg.encode("utf-8"),
+                write_to=png_path,
+                output_width=1600,
+                output_height=1600,
+            )
             print(f"PNG сохранён в {png_path}")
         except (ValueError, OSError) as e:  # pragma: no cover
             print(f"Ошибка конвертации PNG: {e}")

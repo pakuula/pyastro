@@ -20,6 +20,12 @@ def to_roman(n: int) -> str:
     return _ROMAN.get(n, str(n))
 
 @dataclass
+class Shift:
+    """Задает смещения для подписей планет, чтобы не пересекались."""
+    dr: float = 0.0  # радиальное смещение
+    dangle: float = 0.0  # угловое смещение (в градусах)
+
+@dataclass
 class SvgTheme:
     width: int = 800
     height: int = 800
@@ -83,6 +89,8 @@ class SvgTheme:
     house_label_tangent_offset_px: float = 8.0  # смещение вдоль касательной (CCW)
     house_label_angle_offset_deg: float = 0.5   # небольшой угловой сдвиг CCW
 
+    manual_shifts: dict[Planet, Shift] = None  # ручные смещения подписей планет
+
     def __post_init__(self):
         if self.aspect_colors is None:
             # Цвета: секстиль красный, квадрат тёмно-синий, трин оранжевый, оппозиция чёрная
@@ -93,6 +101,8 @@ class SvgTheme:
                 AspectKind.TRINE: "#ff8800",        # оранжевый
                 AspectKind.OPPOSITION: "#000000",   # чёрный
             }
+        if self.manual_shifts is None:
+            self.manual_shifts = {}
 
 # Geometry helpers
 
@@ -383,7 +393,17 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
                 ap(f'<path d="{path}" stroke="{theme.conjunction_highlight_color}" stroke-width="{theme.conjunction_arc_stroke_width}" fill="none" stroke-linecap="round" />')
     for pp in planet_positions:
         ang, sr = layout.get(pp.planet, ((pp.longitude + rot) % 360, base_symbol_r))
-        sx, sy = polar(cx, cy, sr, ang)
+        # Применяем ручные смещения, если заданы
+        if theme.manual_shifts:
+            sh = theme.manual_shifts.get(pp.planet)
+        else:
+            sh = None
+        if sh:
+            ang_shifted = (ang + sh.dangle) % 360
+            sr_shifted = sr + sh.dr
+            sx, sy = polar(cx, cy, sr_shifted, ang_shifted)
+        else:
+            sx, sy = polar(cx, cy, sr, ang)
         deg_sub = round(pp.angle_in_sign())
         ap(f'<text x="{sx:.2f}" y="{sy:.2f}" font-size="{theme.planet_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{theme.planet_color}">{pp.planet.symbol}<tspan font-size="{theme.planet_font_size * theme.subscript_scale:.0f}" baseline-shift="sub">{deg_sub}</tspan></text>')
     # Базовые точки планет поверх линий аспектов (перенесено вниз)
