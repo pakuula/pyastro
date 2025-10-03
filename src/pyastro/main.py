@@ -2,6 +2,7 @@
 import argparse
 from datetime import datetime, timedelta, timezone
 import json
+import os.path
 from zoneinfo import ZoneInfo
 
 from pyastro.rendering import pdf
@@ -38,22 +39,6 @@ def int_to_subscript(n: int) -> str:
 
 def to_roman(n: int) -> str:
     return _ROMAN.get(n, str(n))
-
-
-inputs = {
-    "Жириновский": DatetimeLocation(
-        datetime=datetime(1946, 4, 25, 23, 00, tzinfo=ZoneInfo("Asia/Almaty")),
-        location=GeoPosition(latitude=43.2380, longitude=76.8829),  # Алматы
-    ),
-    "Монро": DatetimeLocation(
-        datetime=datetime(1926, 6, 1, 9, 30, tzinfo=ZoneInfo("America/Los_Angeles")),
-        location=GeoPosition(latitude=34.0522, longitude=-118.2437),  # Лос-Анджелес
-    ),
-    "я": DatetimeLocation(
-        datetime=datetime(1977, 6, 4, 9, 45, tzinfo=ZoneInfo("Asia/Yekaterinburg")),
-        location=GeoPosition(latitude=57.248833, longitude=60.0889),  # Новоуральск
-    ),
-}
 
 
 def process_data(
@@ -339,6 +324,7 @@ def main():
             print(f"Ошибка чтения JSON файла {json_file}: {e}")
             return
         name, dt_loc, _ = parse_json_input(json_data)
+        output_name = args.output if args.output else os.path.basename(json_file).rsplit(".", 1)[0]
     else:
         name = args.name
         try:
@@ -356,7 +342,8 @@ def main():
             return
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)
-    output_name = args.output if args.output else args.name
+        output_name = args.output if args.output else args.name
+        
     process_data(
         person_name=name, dt_loc=dt_loc, output_name=output_name, no_png=not args.png
     )
