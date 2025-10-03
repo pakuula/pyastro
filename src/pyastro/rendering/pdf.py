@@ -16,7 +16,7 @@ variables:
   mainfont: FreeSerif
   sansfont: FreeSans
   monofont: FreeMono
-  fontsize: 12pt
+  fontsize: 14pt
   linestretch: 1.2
 """
 
@@ -91,4 +91,17 @@ def to_pdf(
         )
         if subproc.returncode != 0:
             raise ValueError(f"Ошибка генерации PDF: {subproc.stderr.strip()}")
+    print(f"PDF сохранён в {pdf_path}")
+    
+def to_pdf_weasy(chart: Chart, svg_chart: str, pdf_path: str) -> None:
+    """Генерация PDF отчёта по гороскопу из SVG файла с помощью WeasyPrint"""
+    try:
+        import weasyprint
+    except ImportError:
+        raise ValueError("WeasyPrint не установлен, установите его: pip install weasyprint")
+    
+    from pyastro.rendering import html
+    content = html.to_html(chart, svg_chart=svg_chart)
+
+    weasyprint.HTML(string=content, base_url=".").write_pdf(pdf_path)
     print(f"PDF сохранён в {pdf_path}")

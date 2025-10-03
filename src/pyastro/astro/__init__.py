@@ -73,37 +73,34 @@ class HouseSystem(Enum):
     MORINUS = b"M"
 
 
-_zodiac_symbols = [
-    "♈︎︎",  # Aries
-    "♉︎︎",  # Taurus
-    "♊︎︎",  # Gemini
-    "♋︎︎",  # Cancer
-    "♌︎︎",  # Leo
-    "♍︎︎",  # Virgo
-    "♎︎︎",  # Libra
-    "♏︎︎",  # Scorpio
-    "♐︎︎",  # Sagittarius
-    "♑︎︎",  # Capricorn
-    "♒︎︎",  # Aquarius
-    "♓︎︎",  # Pisces
-]
-
-
 class ZodiacSign(Enum):
     """Знаки зодиака."""
+    # модификатор FE0E (VARIATION SELECTOR-15) добавлен для обеспечения отображения символов монохромно на всех платформах
+    ARIES = (0, "\u2648\ufe0e")  # Овен
+    TAURUS = (1, "\u2649\ufe0e")  # Телец
+    GEMINI = (2, "\u264a\ufe0e")  # Близнецы
+    CANCER = (3, "\u264b\ufe0e")  # Рак
+    LEO = (4, "\u264c\ufe0e")  # Лев
+    VIRGO = (5, "\u264d\ufe0e")  # Дева
+    LIBRA = (6, "\u264e\ufe0e")  # Весы
+    SCORPIO = (7, "\u264f\ufe0e")  # Скорпион
+    SAGITTARIUS = (8, "\u2650\ufe0e")  # Стрелец
+    CAPRICORN = (9, "\u2651\ufe0e")  # Козерог
+    AQUARIUS = (10, "\u2652\ufe0e")  # Водолей
+    PISCES = (11, "\u2653\ufe0e")  # Рыбы
 
-    ARIES = (0, "︎︎♈︎︎")  # Овен
-    TAURUS = (1, "︎︎♉︎︎")  # Телец
-    GEMINI = (2, "︎︎♊︎︎")  # Близнецы
-    CANCER = (3, "︎︎♋︎︎")  # Рак
-    LEO = (4, "︎︎♌︎︎")  # Лев
-    VIRGO = (5, "︎︎♍︎︎")  # Дева
-    LIBRA = (6, "︎︎♎︎︎")  # Весы
-    SCORPIO = (7, "︎︎♏︎︎")  # Скорпион
-    SAGITTARIUS = (8, "︎︎♐︎︎")  # Стрелец
-    CAPRICORN = (9, "︎︎♑︎︎")  # Козерог
-    AQUARIUS = (10, "︎︎♒︎︎")  # Водолей
-    PISCES = (11, "︎︎♓︎︎")  # Рыбы
+    # ARIES = (0, "♈︎")  # Овен
+    # TAURUS = (1, "♉︎")  # Телец
+    # GEMINI = (2, "♊︎︎")  # Близнецы
+    # CANCER = (3, "♋︎︎")  # Рак
+    # LEO = (4, "♌︎︎")  # Лев
+    # VIRGO = (5, "♍︎︎")  # Дева
+    # LIBRA = (6, "♎︎︎")  # Весы
+    # SCORPIO = (7, "♏︎︎")  # Скорпион
+    # SAGITTARIUS = (8, "♐︎︎")  # Стрелец
+    # CAPRICORN = (9, "♑︎︎")  # Козерог
+    # AQUARIUS = (10, "♒︎︎")  # Водолей
+    # PISCES = (11, "♓︎︎")  # Рыбы
 
     @classmethod
     def from_longitude(cls, longitude: float) -> tuple[Self, float]:

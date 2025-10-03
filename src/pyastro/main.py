@@ -141,7 +141,8 @@ def process_data(
             # tmp_md_file.close()
             
             pdf.to_pdf(tmp_md_file.name, output_params.pdf_path)
-            logger.info("PDF сохранён в %s", output_params.pdf_path)
+        # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
+        logger.info("PDF сохранён в %s", output_params.pdf_path)
     if output_params.html_path:
         html_doc = html.to_html(chart, svg_chart=svg_chart)
         with open(output_params.html_path, "w", encoding="utf-8") as f:

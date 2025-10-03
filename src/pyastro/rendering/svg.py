@@ -250,6 +250,27 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
     out: list[str] = []
     ap = out.append
     ap(f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">')
+    ap("""<style>
+    @font-face {
+        font-family: 'FreeSerif';
+        src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerif.ttf") format("truetype");
+        font-weight: normal;
+        font-style: normal;
+    }
+    @font-face {
+        font-family: 'FreeSerif';
+        src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerifBold.ttf") format("truetype");
+        font-weight: bold;
+        font-style: normal;
+    }
+    text.zodiac {
+      /* font-family: "FreeSerif", sans-serif !important; */
+      font-weight: bold;
+      font-size="{theme.sign_font_size}" 
+      fill="{theme.sign_color}"
+      fill: black;
+    }
+  </style>""")
     ap(f'<rect x="0" y="0" width="{w}" height="{h}" fill="{theme.background}" />')
 
     # Zodiac ring sectors CCW
@@ -274,7 +295,7 @@ def chart_to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
     for i, sign in enumerate(zodiac_enum):
         mid_angle = i * 30 + 15 + ring_angle_offset
         tx, ty = polar(cx, cy, (zodiac_r_outer + zodiac_r_inner)/2, mid_angle)
-        ap(f'<text x="{tx:.2f}" y="{ty:.2f}" font-size="{theme.sign_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{theme.sign_color}">{sign.symbol}</text>')
+        ap(f'<text class="zodiac" x="{tx:.2f}" y="{ty:.2f}" text-anchor="middle" dominant-baseline="middle">{sign.symbol}</text>')
 
     # Houses outer circle and segmented cusps
     ap(f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="{theme.circle_stroke_width}" />')
