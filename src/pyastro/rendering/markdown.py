@@ -43,11 +43,13 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
         "Знак",
         "Угол в знаке",
         "Ретроградность",
+        "Дом",
     ]
     writeln("| " + " | ".join(headers) + " |")
     writeln("|" + "|".join(["---"] * len(headers)) + "|")
 
     for planet_pos in chart.planet_positions:
+        
         planet_data = [
             # f"{planet_pos.planet.name}",
             f"{planet_pos.planet.symbol}",
@@ -56,25 +58,9 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
             f"{planet_pos.zodiac_sign.symbol}",
             f"{Angle(planet_pos.angle_in_sign())}",
             "Да" if planet_pos.is_retrograde() else "Нет",
+            f"{chart.planet_houses[planet_pos.planet].roman_number}",
         ]
         writeln("| " + " | ".join(planet_data) + " |")
-
-    writeln()
-
-    para("## Дома по системе Плацидус")
-    headers = ["Дом", "Куспид", "Длина", "Знак", "Угол в знаке"]
-    writeln("| " + " | ".join(headers) + " |")
-    writeln("|" + "|".join(["---"] * len(headers)) + "|")
-
-    for house in chart.houses:
-        house_data = [
-            f"{house.house_number}",
-            f"{Angle.Lon(house.cusp_longitude)}",
-            f"{Angle(house.length)}",
-            f"{house.zodiac_sign.symbol}",
-            f"{Angle(house.angle_in_sign)}",
-        ]
-        writeln("| " + " | ".join(house_data) + " |")
 
     writeln()
 
@@ -92,5 +78,23 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
             f"{Angle(aspect.orb)}",
         ]
         writeln("| " + " | ".join(aspect_data) + " |")
+
+    para("## Дома по системе Плацидус")
+    headers = ["Дом", "Куспид", "Длина", "Знак", "Угол в знаке", "Планеты"]
+    writeln("| " + " | ".join(headers) + " |")
+    writeln("|" + "|".join(["---"] * len(headers)) + "|")
+
+    for house in chart.houses:
+        house_data = [
+            f"{house.roman_number}",
+            f"{Angle.Lon(house.cusp_longitude)}",
+            f"{Angle(house.length)}",
+            f"{house.zodiac_sign.symbol}",
+            f"{Angle(house.angle_in_sign)}",
+            " ".join(p.symbol for p in chart.house_planets.get(house.house_number, [])) or " ",
+        ]
+        writeln("| " + " | ".join(house_data) + " |")
+
+    writeln()
 
     return out.decode("utf-8")

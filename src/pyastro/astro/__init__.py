@@ -34,7 +34,7 @@ class Planet(Enum):
     SATURN = (6, "♄")
     URANUS = (7, "♅")
     NEPTUNE = (8, "♆")
-    PLUTO = (9, "⯓")
+    PLUTO = (9, "♇") # символ ⯓ не поддерживается большинством шрифтов
     # CHIRON = (15, "⚷")
     NORTH_NODE = (10, "☊")
     # SOUTH_NODE = (11, "☋")
@@ -193,6 +193,25 @@ class HousePosition:
         self.cusp_longitude = self.cusp_longitude % 360
         if not (0 < self.length <= 360):
             raise ValueError(f"length must be between 0 and 360, got {self.length}")
+
+    @property
+    def roman_number(self) -> str:
+        """Возвращает номер дома в римской нотации."""
+        roman_numerals = [
+            "I",
+            "II",
+            "III",
+            "IV",
+            "V",
+            "VI",
+            "VII",
+            "VIII",
+            "IX",
+            "X",
+            "XI",
+            "XII",
+        ]
+        return roman_numerals[self.house_number - 1]
 
     @property
     def zodiac_sign(self) -> ZodiacSign:
@@ -396,6 +415,29 @@ def get_aspects(
                 aspects.append(aspect)
     return aspects
 
+def get_planet_houses(
+    planet_positions: list[PlanetPosition], house_positions: list[HousePosition]
+) -> dict[Planet, HousePosition]:
+    """Возвращает словарь с планетами и домами, в которых они находятся."""
+    planet_houses = {}
+    for planet in planet_positions:
+        for house in house_positions:
+            if house.has_planet(planet):
+                planet_houses[planet.planet] = house
+                break
+    return planet_houses
+
+def get_house_planets(
+    planet_positions: list[PlanetPosition], house_positions: list[HousePosition]
+) -> dict[int, list[Planet]]:
+    """Возвращает словарь с номерами домов и списками планет, находящихся в этих домах."""
+    house_planets = {house.house_number: [] for house in house_positions}
+    for planet in planet_positions:
+        for house in house_positions:
+            if house.has_planet(planet):
+                house_planets[house.house_number].append(planet.planet)
+                break
+    return house_planets
 
 class Chart:
     """Астрологическая карта, включающая позиции планет, куспиды домов и аспекты."""
@@ -407,3 +449,6 @@ class Chart:
         self.planet_positions = self.dt_loc.get_all_planet_positions()
         self.houses = self.dt_loc.get_house_cusps(self.house_system)
         self.aspects = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
+        
+        self.planet_houses = get_planet_houses(self.planet_positions, self.houses)
+        self.house_planets = get_house_planets(self.planet_positions, self.houses)

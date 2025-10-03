@@ -2,8 +2,8 @@
 __pycache__/
 /*.svg
 /src/pyastro.egg-info/
-*.png
-monroe.md
-monroe.pdf
-zhirinovski.md
-zhirinovski.pdf
+/*.png
+/*.md
+!README.md
+/*.pdf
+/*.html

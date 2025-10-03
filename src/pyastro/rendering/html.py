@@ -87,6 +87,7 @@ def to_html(chart: Chart, svg_chart: Optional[str] = None, svg_path: Optional[st
     writeln('            <th>Знак</th>')
     writeln('            <th>Угол в знаке</th>')
     writeln('            <th>Ретроградность</th>')
+    writeln('            <th>Дом</th>')
     writeln('        </tr>')
     writeln('    </thead>')
     writeln('    <tbody>')
@@ -99,6 +100,7 @@ def to_html(chart: Chart, svg_chart: Optional[str] = None, svg_path: Optional[st
         writeln(f'            <td>{planet_pos.zodiac_sign.symbol}</td>')
         writeln(f'            <td>{Angle(planet_pos.angle_in_sign())}</td>')
         writeln(f'            <td>{"Да" if planet_pos.is_retrograde() else "Нет"}</td>')
+        writeln(f'            <td>{chart.planet_houses[planet_pos.planet].roman_number}</td>')
         writeln('        </tr>')
     
     writeln('    </tbody>')
@@ -114,17 +116,21 @@ def to_html(chart: Chart, svg_chart: Optional[str] = None, svg_path: Optional[st
     writeln('            <th>Длина</th>')
     writeln('            <th>Знак</th>')
     writeln('            <th>Угол в знаке</th>')
+    writeln('            <th>Планеты</th>')
     writeln('        </tr>')
     writeln('    </thead>')
     writeln('    <tbody>')
     
     for house in chart.houses:
         writeln('        <tr>')
-        writeln(f'            <td>{house.house_number}</td>')
+        writeln(f'            <td>{house.roman_number}</td>')
         writeln(f'            <td>{Angle.Lon(house.cusp_longitude)}</td>')
         writeln(f'            <td>{Angle(house.length)}</td>')
         writeln(f'            <td>{house.zodiac_sign.symbol}</td>')
         writeln(f'            <td>{Angle(house.angle_in_sign)}</td>')
+        planets_in_house = chart.house_planets.get(house.house_number, [])
+        planet_symbols = ' '.join([p.symbol for p in planets_in_house])
+        writeln(f'            <td>{planet_symbols}</td>')
         writeln('        </tr>')
     
     writeln('    </tbody>')
