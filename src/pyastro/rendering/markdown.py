@@ -1,7 +1,7 @@
 """Модуль для генерации markdown отчётов по астрологическим картам"""
 
-from pyastro.astro import Angle, Chart
-from pyastro.util import Latitude, Longitude
+from pyastro.astro import Chart
+from pyastro.util import Angle, Latitude, Longitude
 
 
 def to_markdown(chart: Chart, svg_path: str) -> str:

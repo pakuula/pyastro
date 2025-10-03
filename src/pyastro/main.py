@@ -1,17 +1,21 @@
 #! /usr/bin/env python3
 import argparse
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 import os.path
+import sys
+from tempfile import NamedTemporaryFile
+from typing import Optional
 from zoneinfo import ZoneInfo
 
-from pyastro.rendering import pdf
-from pyastro.rendering.markdown import to_markdown
-from pyastro.rendering.svg import Shift, asc_to_angle
+from .rendering import svg, markdown, html, pdf
 
-from .astro import Chart, DatetimeLocation, GeoPosition, Angle, HouseSystem, Planet
-from .rendering import chart_to_svg, SvgTheme
-from .util import CoordError, parse_lat, parse_lon
+from .astro import Chart, DatetimeLocation, GeoPosition, HouseSystem
+from .util import CoordError, parse_lat, parse_lon, Angle
+
+logger = logging.getLogger(__name__)
 
 # Helper to convert integer to Unicode subscript digits (0-29)
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -41,14 +45,9 @@ def to_roman(n: int) -> str:
     return _ROMAN.get(n, str(n))
 
 
-def process_data(
-    person_name: str,
-    dt_loc: DatetimeLocation,
-    output_name: str = "chart",
-    no_png: bool = True,
-):
-    chart = Chart(person_name, dt_loc)
-    print(f"Астрологическая карта для: {person_name}")
+def print_chart_info(chart: Chart):
+    print(f"Астрологическая карта для: {chart.name}")
+    dt_loc = chart.dt_loc
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
     print(
         f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n"
@@ -67,7 +66,7 @@ def process_data(
         )
 
     print("\nКуспиды домов (Placidus):")
-    for house_cusp in dt_loc.get_house_cusps(HouseSystem.PLACIDUS):
+    for house_cusp in chart.dt_loc.get_house_cusps(HouseSystem.PLACIDUS):
         deg_sub = int_to_subscript(round(house_cusp.angle_in_sign))
         roman = to_roman(house_cusp.house_number)
         print(
@@ -87,43 +86,84 @@ def process_data(
             f"(oрб: {Angle(aspect.orb)})"
         )
 
-    # Экспортируем SVG
-    svg = chart_to_svg(
-        chart,
-        SvgTheme(manual_shifts={Planet.VENUS: Shift(dr=10), Planet.MARS: Shift(dr=-5)}),
-        angle=asc_to_angle(chart, 180),
-    )
-    svg_path = f"{output_name}.svg"
-    with open(svg_path, "w", encoding="utf-8") as f:
-        f.write(svg)
-    print(f"\nSVG сохранён в {svg_path}")
 
-    # Генерация PNG из SVG
-    if not no_png:
-        png_path = f"{output_name}.png"
+@dataclass
+class OutputParams:
+    png_path: Optional[str] = None
+    svg_path: Optional[str] = None
+    mdown_path: Optional[str] = None
+    html_path: Optional[str] = None
+    pdf_path: Optional[str] = None
+    print_flag: bool = True
+
+
+def process_data(
+    person_name: str,
+    dt_loc: DatetimeLocation,
+    output_params: OutputParams,
+):
+    """Генерация астрологической карты и вывод отчётов в разные форматы."""
+    chart = Chart(person_name, dt_loc)
+
+    if output_params.print_flag:
+        print_chart_info(chart)
+
+    svg_chart = svg.chart_to_svg(
+            chart,
+            svg.SvgTheme(),
+            angle=svg.asc_to_angle(chart, 180),
+        )
+    logger.debug("Output params: %s", output_params)
+    if output_params.svg_path:
+        with open(output_params.svg_path, "w", encoding="utf-8") as f:
+            f.write(svg_chart)
+        logger.info("SVG сохранён в %s", output_params.svg_path)
+    if output_params.mdown_path:
+        mdown_path = output_params.mdown_path
+        svg_path = output_params.mdown_path.rsplit(".", 1)[0] + ".svg"
+        with open(svg_path, "w", encoding="utf-8") as f:
+            f.write(svg_chart)
+            logger.debug("SVG для markdown сохранён в %s", svg_path)
+        with open(mdown_path, "w", encoding="utf-8") as f:
+            mdown = markdown.to_markdown(chart, svg_path=os.path.basename(svg_path))
+            f.write(mdown)
+        logger.info("Markdown сохранён в %s", output_params.mdown_path)
+    if output_params.pdf_path:
+        with NamedTemporaryFile(delete=True, suffix=".svg") as tmp_svg_file, \
+             NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file:
+            tmp_svg_file.write(svg_chart.encode("utf-8"))
+            tmp_svg_file.flush()
+            # tmp_svg_file.close()
+            
+            mdown = markdown.to_markdown(chart, svg_path=tmp_svg_file.name)
+            tmp_md_file.write(mdown.encode("utf-8"))
+            tmp_md_file.flush()
+            # tmp_md_file.close()
+            
+            pdf.to_pdf(tmp_md_file.name, output_params.pdf_path)
+            logger.info("PDF сохранён в %s", output_params.pdf_path)
+    if output_params.html_path:
+        html_doc = html.to_html(chart, svg_chart=svg_chart)
+        with open(output_params.html_path, "w", encoding="utf-8") as f:
+            f.write(html_doc)
+        logger.info("HTML сохранён в %s", output_params.html_path)
+    if output_params.png_path:
         try:
             import cairosvg  # type: ignore
         except ImportError as e:  # pragma: no cover
-            print(f"Не установлен cairosvg, пропуск PNG: {e}")
+            logging.error("Не установлен cairosvg, пропуск PNG: %s", e)
         else:
             try:
                 cairosvg.svg2png(
-                    bytestring=svg.encode("utf-8"),
-                    write_to=png_path,
+                    bytestring=svg_chart.encode("utf-8"),
+                    write_to=output_params.png_path,
                     output_width=1600,
                     output_height=1600,
                 )
-                print(f"PNG сохранён в {png_path}")
+                logger.info("PNG сохранён в %s", output_params.png_path)
             except (ValueError, OSError) as e:  # pragma: no cover
-                print(f"Ошибка конвертации PNG: {e}")
-    mdown = to_markdown(chart, svg_path)
-    mdown_path = f"{output_name}.md"
-    with open(mdown_path, "w", encoding="utf-8") as f:
-        f.write(mdown)
-    print(f"Markdown сохранён в {mdown_path}")
-
-    pdf.to_pdf(mdown_path, f"{output_name}.pdf")
-
+                logging.error("Ошибка конвертации PNG: %s", e)
+    
 
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
@@ -144,9 +184,7 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     if not "location" in event_data:
         raise ValueError("JSON должен содержать поле 'location'")
     loc = parse_json_location(event_data["location"])
-    extra = {
-        k: v for k, v in json_data.items() if k not in ("name", "event")
-    }
+    extra = {k: v for k, v in json_data.items() if k not in ("name", "event")}
     return name, DatetimeLocation(datetime=dt, location=loc), extra
 
 
@@ -200,7 +238,7 @@ def parse_json_location(loc_json: dict) -> GeoPosition:
 
 def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
     """Разбор строки широты и долготы в объект GeoPosition.
-    
+
     Возможные форматы:
     - число с плавающей точкой, например 55.7558, -37.6173
     """
@@ -208,9 +246,7 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
         try:
             latitude = parse_lat(lat_str)
         except CoordError as e:
-            raise ValueError(
-                f"Неверный формат широты: {lat_str}"
-            ) from e
+            raise ValueError(f"Неверный формат широты: {lat_str}") from e
     elif isinstance(lat_str, (int, float)):
         latitude = float(lat_str)
         if not (-90.0 <= latitude <= 90.0):
@@ -222,9 +258,7 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
         try:
             longitude = parse_lon(lon_str)
         except CoordError as e:
-            raise ValueError(
-                f"Неверный формат долготы: {lon_str}"
-            ) from e
+            raise ValueError(f"Неверный формат долготы: {lon_str}") from e
     elif isinstance(lon_str, (int, float)):
         longitude = float(lon_str)
         if not (-180.0 <= longitude <= 180.0):
@@ -234,6 +268,9 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
 
     return GeoPosition(latitude=latitude, longitude=longitude)
 
+def _init_logging():
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logger.setLevel(logging.INFO)
 
 def main():
     """
@@ -248,17 +285,9 @@ def main():
     -o --output имя для файлов вывода (без расширения), по умолчанию используется параметр -n
     --png генерировать PNG, по умолчанию False
     """
+    _init_logging()
     parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
-    parser.add_argument(
-        "-o",
-        "--output",
-        type=str,
-        default="",
-        help="Имя для файлов вывода (без расширения), по умолчанию используется параметр -n",
-    )
-    parser.add_argument(
-        "--png", action="store_true", help="Генерировать PNG (по умолчанию False)"
-    )
+
 
     direct_args = parser.add_argument_group(
         "Параметры натальной карты",
@@ -302,9 +331,48 @@ def main():
         type=str,
         help="Имя входного файла с параметрами (пока не реализовано)",
     )
+    
+    output_group = parser.add_argument_group("Параметры выходных файлов", "Настройка типов выходных файлов")
+    output_group.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="",
+        help="Имя для файлов вывода (без расширения), по умолчанию используется параметр -n",
+    )
+    output_group.add_argument(
+        "--png", action="store_true", help="Генерировать PNG (по умолчанию False)"
+    )
+    output_group.add_argument(
+        "--svg", action="store_true", help="Генерировать SVG (по умолчанию False)"
+    )
+    output_group.add_argument(
+        "--text", action="store_true", help="Генерировать Markdown (по умолчанию False)"
+    )
+    output_group.add_argument(
+        "--html", action="store_true", help="Генерировать HTML (по умолчанию False)"
+    )
+    output_group.add_argument(
+        "--pdf", action="store_true", help="Генерировать PDF (по умолчанию False)"
+    )
+    output_group.add_argument(
+        "-P", "--no-print",
+        action="store_true",
+        help="Не выводить текстовую информацию в консоль (по умолчанию False)",
+    )
+
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Выводить отладочную информацию (по умолчанию False)",
+    )
 
     args = parser.parse_args()
-
+    if args.verbose:
+        logger.setLevel(logging.DEBUG)
+        logger.debug("Включён подробный вывод")
+    
     if not args.name and not args.input_file:
         print("Ошибка: нужно указать имя человека (-n) или входной файл (-i)")
         return
@@ -324,7 +392,11 @@ def main():
             print(f"Ошибка чтения JSON файла {json_file}: {e}")
             return
         name, dt_loc, _ = parse_json_input(json_data)
-        output_name = args.output if args.output else os.path.basename(json_file).rsplit(".", 1)[0]
+        output_name = (
+            args.output
+            if args.output
+            else os.path.basename(json_file).rsplit(".", 1)[0]
+        )
     else:
         name = args.name
         try:
@@ -343,11 +415,22 @@ def main():
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)
         output_name = args.output if args.output else args.name
-        
+    
+    output_params = OutputParams(
+        png_path=f"{output_name}.png" if args.png else None,
+        svg_path=f"{output_name}.svg" if args.svg else None,
+        mdown_path=f"{output_name}.md" if args.text else None,
+        html_path=f"{output_name}.html" if args.html else None,
+        pdf_path=f"{output_name}.pdf" if args.pdf else None,
+        print_flag=not args.no_print,
+    )
+    
     process_data(
-        person_name=name, dt_loc=dt_loc, output_name=output_name, no_png=not args.png
+        person_name=name, dt_loc=dt_loc, output_params=output_params
     )
 
 
 if __name__ == "__main__":
+    
+    logger.error("Запуск pyastro")
     main()

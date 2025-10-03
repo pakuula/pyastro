@@ -34,7 +34,7 @@ class Planet(Enum):
     SATURN = (6, "♄")
     URANUS = (7, "♅")
     NEPTUNE = (8, "♆")
-    PLUTO = (9, "♇")
+    PLUTO = (9, "⯓")
     # CHIRON = (15, "⚷")
     NORTH_NODE = (10, "☊")
     # SOUTH_NODE = (11, "☋")
@@ -222,126 +222,6 @@ class HousePosition:
     def has_planet(self, planet_position: PlanetPosition) -> bool:
         """Проверяет, находится ли планета в пределах этого дома."""
         return self.has_longitude(planet_position.longitude)
-
-
-@dataclass
-class Angle:
-    """Долгота или широта, с поддержкой арифметики и форматирования.
-
-    Значение всегда хранится в градусах.
-
-    :param value: значение угла в градусах
-    :param from_0_to_360: если True, значение всегда от 0 до 360, иначе от -180 до +180
-    """
-
-    value: float  # градусы
-    from_0_to_360: bool = (
-        True  # если True, значение всегда от 0 до 360, иначе от -180 до +180
-    )
-
-    def __post_init__(self):
-        if self.from_0_to_360:
-            self.value = self.value % 360
-        else:
-            self.value = ((self.value + 180) % 360) - 180
-
-    def __add__(self, other: Any) -> Self:
-        if isinstance(other, Angle):
-            return Angle(self.value + other.value, self.from_0_to_360)
-        elif isinstance(other, (int, float)):
-            return Angle(self.value + other, self.from_0_to_360)
-        return NotImplemented
-
-    def __sub__(self, other: Any) -> Self:
-        if isinstance(other, Angle):
-            return Angle(self.value - other.value, self.from_0_to_360)
-        elif isinstance(other, (int, float)):
-            return Angle(self.value - other, self.from_0_to_360)
-        return NotImplemented
-
-    def __mul__(self, other: Any) -> Self:
-        if isinstance(other, (int, float)):
-            return Angle(self.value * other, self.from_0_to_360)
-        return NotImplemented
-
-    def __truediv__(self, other: Any) -> Self:
-        if isinstance(other, (int, float)):
-            return Angle(self.value / other, self.from_0_to_360)
-        return NotImplemented
-
-    def __repr__(self) -> str:
-        return f"Angle({self.value}, from_0_to_360={self.from_0_to_360})"
-
-    def __format__(self, format_spec: str) -> str:
-        if self.from_0_to_360:
-            sign = ""
-            deg = int(self.value)
-            min = int((self.value - deg) * 60)
-            sec = ((self.value - deg) * 60 - min) * 60
-        else:
-            sign = "-" if self.value < 0 else ""
-            abs_value = abs(self.value)
-            deg = int(abs_value)
-            min = int((abs_value - deg) * 60)
-            sec = ((abs_value - deg) * 60 - min) * 60
-        if format_spec:
-            # Форматирование с плавающей точкой для секунд
-            sec_str = format(sec, format_spec) if format_spec else f"{sec:.0f}"
-        else:
-            sec_str = f"{round(sec):02d}" # Округление до целого числа секунд
-        return f"{sign}{deg}°{min:02d}'{sec_str}\""
-
-    @classmethod
-    def from_str(cls, angle_str: str, from_0_to_360: bool = False) -> Self:
-        """Парсит строку в формате ±DD°MM'SS.SS" в Angle."""
-        angle_str = angle_str.strip()
-        if not angle_str:
-            raise ValueError("Empty angle string")
-
-        sign = 1
-        if angle_str[0] == "-":
-            if from_0_to_360:
-                raise ValueError("Negative angle not allowed in 0-360 mode")
-            sign = -1
-            angle_str = angle_str[1:].strip()
-        elif angle_str[0] == "+":
-            angle_str = angle_str[1:].strip()
-
-        try:
-            deg_part, rest = angle_str.split("°", 1)
-            deg = int(deg_part.strip())
-            min_part, sec_part = rest.split("'", 1)
-            min = int(min_part.strip())
-            sec = float(sec_part.strip().rstrip('"'))
-        except Exception as e:
-            raise ValueError(f"Invalid angle format: {angle_str}") from e
-
-        if not (0 <= deg <= 360 and 0 <= min < 60 and 0 <= sec < 60):
-            raise ValueError(f"Angle components out of range in: {angle_str}")
-
-        total_degrees = sign * (deg + min / 60 + sec / 3600)
-        from_0_to_360 = from_0_to_360 or total_degrees >= 0
-        return cls(total_degrees, from_0_to_360)
-
-    @classmethod
-    def from_longitude(cls, longitude: float) -> Self:
-        """Создает Angle из долготы в градусах."""
-        return cls(longitude, True)
-
-    @classmethod
-    def from_latitude(cls, latitude: float) -> Self:
-        """Создает Angle из широты в градусах."""
-        return cls(latitude, False)
-
-    @classmethod
-    def Lat(cls, latitude: float) -> Self:
-        """Создает Angle из широты в градусах."""
-        return cls(latitude, False)
-
-    @classmethod
-    def Lon(cls, longitude: float) -> Self:
-        """Создает Angle из долготы в градусах."""
-        return cls(longitude, True)
 
 
 @dataclass
