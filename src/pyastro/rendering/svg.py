@@ -69,17 +69,20 @@ class SvgTheme:
         None  # цветной зодиак: ["#FFDDC1", "#C1E1FF", "#C1FFD7", "#FFFAC1", "#E1C1FF", "#FFC1C1"]
     )
     zodiac_border: str = "#999"
+
+    # Параметры подписей планет
     planet_font_size: int = 20
+    planet_angle_baseline_shift = "+30%"  # чтобы верхняя линия индекса примерно совпадала с верхней линией символа
+    planet_retro_baseline_shift = "-30%"
     planet_color: str = "#000"
     planet_symbol_offset: float = 25.0
+    # Параметры подписей знаков зодиака
     sign_font_size: int = 16
     sign_color: str = "#444"
-    house_num_font_size: int = 12
-    house_num_color: str = "#555"
-    # Сдвиг нижнего индекса домов (относительно базовой линии номера). Отрицательный % поднимает.
-    house_subscript_baseline_shift: str = (
-        "-40%"  # чтобы baseline номера примерно проходила через центр индекса
-    )
+
+    # Масштаб шрифта для дополнительной информации (например, градусы домов)
+    extra_info_scale: float = 0.66
+
     aspect_colors: dict[AspectKind, str] = None
     aspect_width: float = 1.6
     tick_length: float = 6.0
@@ -128,13 +131,19 @@ class SvgTheme:
     planet_base_point_fill: str = "#cccccc"
     planet_base_point_stroke: str = "#000000"
     planet_base_point_stroke_width: float = 0.6
-    # Масштаб нижних индексов (subscripts) относительно основного размера символа
-    subscript_scale: float = 0.66
     # Коэффициент радиуса внешнего кольца зодиака относительно внешнего радиуса домов
-    zodiac_outer_ratio: float = 0.86  # было 0.93; меньше -> шире кольцо домов
+    zodiac_outer_ratio: float = 0.86
+
+    # Параметры подписей домов
+    house_num_font_size: int = 14
+    house_num_color: str = "#555"
     # Смещения подписей домов, чтобы не пересекать линии куспидов
-    house_label_tangent_offset_px: float = 8.0  # смещение вдоль касательной (CCW)
+    house_label_tangent_offset_px: float = 16.0  # смещение вдоль касательной (CCW)
     house_label_angle_offset_deg: float = 0.5  # небольшой угловой сдвиг CCW
+    # Сдвиг значения угла дома относительно базовой линии номера.
+    house_angle_baseline_shift: str = (
+        "+30%"  # чтобы верхняя линия индекса примерно совпадала с верхней линией номера дома
+    )
 
     manual_shifts: dict[str, Shift] = None  # ручные смещения подписей планет
 
@@ -278,6 +287,7 @@ def _coerce_type(t: Any, val: Any, field_name: str):
 
 
 # Geometry helpers
+
 
 @dataclass
 class PolarConverter:
@@ -434,9 +444,7 @@ def _conjunction_components(chart: Chart) -> list[list[Planet]]:
     return comps
 
 
-def to_svg(
-    chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
-) -> str:
+def to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> str:
     """Возвращает SVG строку натальной карты.
 
     angle: на сколько градусов ПОВЕРНУТЬ КОЛЬЦО ЗНАКОВ ЗОДИАКА ПРОТИВ часовой стрелки (только фоновые сектора, символы знаков и граничные 30° тики). Планеты, дома и аспекты остаются в гео-долготах без сдвига.
@@ -448,7 +456,13 @@ def to_svg(
 
     w, h = theme.width, theme.height
     cx, cy = w / 2, h / 2
-    polar = PolarConverter(cx=cx, cy=cy, angle_offset_deg=angle, clockwise=theme.clockwise, zero_at=theme.zero_at)
+    polar = PolarConverter(
+        cx=cx,
+        cy=cy,
+        angle_offset_deg=angle,
+        clockwise=theme.clockwise,
+        zero_at=theme.zero_at,
+    )
     # направление дуг при рисовании от меньшего угла к большему (0 - против часовой, 1 - по часовой)
     sweep_flag = 1 if theme.clockwise else 0
 
@@ -495,7 +509,7 @@ def to_svg(
     # Zodiac ring sectors
     for i in range(12):
         # start_angle = i * 30 + ring_angle_offset
-        start_angle = i * 30 
+        start_angle = i * 30
         end_angle = start_angle + 30
         x1o, y1o = polar(start_angle, zodiac_r_outer)
         x2o, y2o = polar(end_angle, zodiac_r_outer)
@@ -518,7 +532,7 @@ def to_svg(
     # Zodiac signs glyphs
     for i, sign in enumerate(ZodiacSign):
         # mid_angle = i * 30 + 15 + ring_angle_offset
-        mid_angle = i * 30 + 15 # середина сектора
+        mid_angle = i * 30 + 15  # середина сектора
         tx, ty = polar(mid_angle, (zodiac_r_outer + zodiac_r_inner) / 2)
         ap(
             f'<text class="zodiac" x="{tx:.2f}" y="{ty:.2f}" text-anchor="middle" dominant-baseline="middle">{sign.symbol}</text>'
@@ -545,8 +559,12 @@ def to_svg(
         deg_sub = round(house.cusp_longitude % 30)
         label = (
             f"{to_roman(house.house_number)}"
-            f"<tspan font-size='{theme.house_num_font_size * theme.subscript_scale:.0f}' "
-            f"baseline-shift='{theme.house_subscript_baseline_shift}'>{deg_sub}</tspan>"
+            # показатель угла куспида дома в знаке
+            f"<tspan font-size='{theme.house_num_font_size * theme.extra_info_scale:.0f}' "
+            f"baseline-shift='{theme.house_angle_baseline_shift}' "
+            ">"
+            f"{deg_sub}"
+            "</tspan>"
         )
         base_r_label = (houses_r_outer + zodiac_r_outer) / 2
         # лёгкий угловой сдвиг (CCW)
@@ -559,7 +577,11 @@ def to_svg(
         ntx += tx
         nty += ty
         ap(
-            f"<text x='{ntx:.2f}' y='{nty:.2f}' font-size='{theme.house_num_font_size}' fill='{theme.house_num_color}' font-weight='bold' text-anchor='middle' dominant-baseline='middle'>{label}</text>"
+            f"<text x='{ntx:.2f}' y='{nty:.2f}' "
+            f"font-size='{theme.house_num_font_size}' fill='{theme.house_num_color}' font-weight='bold' "
+            f"text-anchor='middle' dominant-baseline='middle'>"
+            f"{label}"
+            "</text>"
         )
 
     # Structural circles
@@ -593,7 +615,7 @@ def to_svg(
             f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.tick_color}" stroke-width="0.5" stroke-opacity="0.65" />'
         )
 
-    # Aspects with symbols
+    # Аспекты
     if chart.aspects:
         for aspect in chart.aspects:
             p1 = planet_xy_base.get(aspect.planet1)
@@ -610,10 +632,12 @@ def to_svg(
                 mx = (x1 + x2) / 2
                 my = (y1 + y2) / 2
                 ap(
-                    f'<text x="{mx:.2f}" y="{my:.2f}" font-size="{theme.aspect_symbol_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{color}">{aspect.kind.symbol}</text>'
+                    f'<text x="{mx:.2f}" y="{my:.2f}" '
+                    f'font-size="{theme.aspect_symbol_font_size}"  fill="{color}" '
+                    f'text-anchor="middle" dominant-baseline="middle">{aspect.kind.symbol}</text>'
                 )
 
-    # Planet symbols with improved collision avoidance (angular fan + optional radial slight staggering)
+    # Расстояние от центра до символов планет
     base_symbol_r = min(
         planet_r + theme.planet_symbol_offset,
         zodiac_r_inner - theme.planet_font_size * 0.65,
@@ -673,7 +697,6 @@ def to_svg(
                     f'<path d="{path}" stroke="{theme.conjunction_highlight_color}" stroke-width="{theme.conjunction_arc_stroke_width}" fill="none" stroke-linecap="round" />'
                 )
     for pp in planet_positions:
-        # ang, sr = layout.get(pp.planet, ((pp.longitude + rot) % 360, base_symbol_r))
         ang, sr = layout.get(pp.planet, ((pp.longitude) % 360, base_symbol_r))
         # Применяем ручные смещения, если заданы
         if theme.manual_shifts:
@@ -687,8 +710,33 @@ def to_svg(
         else:
             sx, sy = polar(ang, sr)
         deg_sub = round(pp.angle_in_sign())
+        extra_fonst_size = theme.planet_font_size * theme.extra_info_scale
+        # Подпись планеты с градусом в знаке + R (если ретроградна)
+        extra = ""
+        # Индекс ретроградности
+        if pp.is_retrograde():
+            extra += (
+                f"<tspan font-size='{theme.planet_font_size * theme.extra_info_scale:.1f}' "
+                # f"baseline-shift='{theme.planet_retro_baseline_shift}'"
+                f" dy='{extra_fonst_size*0.4:.1f}'"
+                ">R</tspan>"
+            )
+        # Индекс градуса в знаке
+        extra += (
+            f"<tspan font-size='{extra_fonst_size:.1f}'"
+            # f" baseline-shift='{theme.planet_angle_baseline_shift}'"
+            f" dy='{-extra_fonst_size*(0.8 if pp.is_retrograde() else 0.4):.1f}'"
+            # Смещение dx - чистая эвристика, ширина символа R шрифта FreeSerif примерно 0.7 от высоты
+            f" dx='{-extra_fonst_size*0.7 if pp.is_retrograde() else 0:.1f}'"
+            ">"
+            f"{deg_sub}</tspan>"
+        )
+        planet_symbol = f"{pp.planet.symbol}{extra}"
+
         ap(
-            f'<text x="{sx:.2f}" y="{sy:.2f}" font-size="{theme.planet_font_size}" text-anchor="middle" dominant-baseline="middle" fill="{theme.planet_color}">{pp.planet.symbol}<tspan font-size="{theme.planet_font_size * theme.subscript_scale:.0f}" baseline-shift="sub">{deg_sub}</tspan></text>'
+            f'<text x="{sx:.2f}" y="{sy:.2f}" '
+            f'font-size="{theme.planet_font_size}" fill="{theme.planet_color}" '
+            f'text-anchor="middle" dominant-baseline="middle">{planet_symbol}</text>'
         )
     # Базовые точки планет поверх линий аспектов (перенесено вниз)
     if theme.show_planet_base_points:
