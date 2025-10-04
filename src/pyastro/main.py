@@ -108,10 +108,12 @@ def process_data(
     if output_params.print_flag:
         print_chart_info(chart)
 
-    svg_chart = svg.chart_to_svg(
+    if svg_theme is None:
+        svg_theme = svg.SvgTheme()
+    svg_chart = svg.to_svg(
         chart,
-        svg_theme or svg.SvgTheme(),
-        angle=svg.asc_to_angle(chart, 180),
+        svg_theme,
+        angle=-chart.ascendant,
     )
     logger.debug("Output params: %s", output_params)
     if output_params.svg_path:
