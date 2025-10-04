@@ -461,8 +461,8 @@ ASPECT_ORBS = {
     AspectKind.OPPOSITION: 8.0,
 }
 PLANET_ORBS = {
-    Planet.SOUTH_NODE: 1.5,
-    Planet.NORTH_NODE: 1.5,
+    Planet.SOUTH_NODE: 5,
+    Planet.NORTH_NODE: 5,
 }
 
 
