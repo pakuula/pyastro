@@ -480,10 +480,14 @@ class Chart:
         self.name = name
         self.dt_loc = dt_loc
         self.house_system = house_system
-        
-        self.planet_positions = self.dt_loc.get_all_planet_positions()
-        self.houses = self.dt_loc.get_house_cusps(self.house_system)
-        self.aspects = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
-        
-        self.planet_houses = get_planet_houses(self.planet_positions, self.houses)
-        self.house_planets = get_house_planets(self.planet_positions, self.houses)
+
+        self.planet_positions: list[PlanetPosition] = self.dt_loc.get_all_planet_positions()
+        self.houses: list[HousePosition] = self.dt_loc.get_house_cusps(self.house_system)
+        self.ascendant: float = self.houses[0].cusp_longitude
+        self.descendant: float = (self.ascendant + 180) % 360
+        self.midheaven: float = self.houses[9].cusp_longitude
+        self.imum_coeli: float = self.houses[3].cusp_longitude
+        self.aspects: AspectList = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
+
+        self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(self.planet_positions, self.houses)
+        self.house_planets: dict[int, list[Planet]] = get_house_planets(self.planet_positions, self.houses)
