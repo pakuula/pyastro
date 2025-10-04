@@ -5,9 +5,8 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os.path
-import sys
 from tempfile import NamedTemporaryFile
-from typing import Optional
+from typing import Optional, Self
 from zoneinfo import ZoneInfo
 
 from .rendering import svg, markdown, html, pdf
@@ -101,6 +100,7 @@ def process_data(
     person_name: str,
     dt_loc: DatetimeLocation,
     output_params: OutputParams,
+    svg_theme: Optional[svg.SvgTheme] = None,
 ):
     """Генерация астрологической карты и вывод отчётов в разные форматы."""
     chart = Chart(person_name, dt_loc)
@@ -109,10 +109,10 @@ def process_data(
         print_chart_info(chart)
 
     svg_chart = svg.chart_to_svg(
-            chart,
-            svg.SvgTheme(),
-            angle=svg.asc_to_angle(chart, 180),
-        )
+        chart,
+        svg_theme or svg.SvgTheme(),
+        angle=svg.asc_to_angle(chart, 180),
+    )
     logger.debug("Output params: %s", output_params)
     if output_params.svg_path:
         with open(output_params.svg_path, "w", encoding="utf-8") as f:
@@ -129,17 +129,18 @@ def process_data(
             f.write(mdown)
         logger.info("Markdown сохранён в %s", output_params.mdown_path)
     if output_params.pdf_path:
-        with NamedTemporaryFile(delete=True, suffix=".svg") as tmp_svg_file, \
-             NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file:
+        with NamedTemporaryFile(
+            delete=True, suffix=".svg"
+        ) as tmp_svg_file, NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file:
             tmp_svg_file.write(svg_chart.encode("utf-8"))
             tmp_svg_file.flush()
             # tmp_svg_file.close()
-            
+
             mdown = markdown.to_markdown(chart, svg_path=tmp_svg_file.name)
             tmp_md_file.write(mdown.encode("utf-8"))
             tmp_md_file.flush()
             # tmp_md_file.close()
-            
+
             pdf.to_pdf(tmp_md_file.name, output_params.pdf_path)
         # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
         logger.info("PDF сохранён в %s", output_params.pdf_path)
@@ -164,7 +165,7 @@ def process_data(
                 logger.info("PNG сохранён в %s", output_params.png_path)
             except (ValueError, OSError) as e:  # pragma: no cover
                 logging.error("Ошибка конвертации PNG: %s", e)
-    
+
 
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
@@ -186,6 +187,7 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
         raise ValueError("JSON должен содержать поле 'location'")
     loc = parse_json_location(event_data["location"])
     extra = {k: v for k, v in json_data.items() if k not in ("name", "event")}
+    extra.update({k: v for k, v in event_data.items() if k not in ("datetime", "location")})
     return name, DatetimeLocation(datetime=dt, location=loc), extra
 
 
@@ -269,9 +271,64 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
 
     return GeoPosition(latitude=latitude, longitude=longitude)
 
+
 def _init_logging():
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     logger.setLevel(logging.INFO)
+
+@dataclass
+class Datetime:
+    date: str  # YYYY-MM-DD
+    time: str  # HH:MM:SS
+    time_zone: str  # e.g. Europe/Moscow or -08:00
+
+    @staticmethod
+    def from_json(data: dict) -> Self:
+        date = data.get("date")
+        time = data.get("time")
+        time_zone = data.get("time_zone")
+        if not isinstance(date, str):
+            raise ValueError("Datetime 'date' must be a string")
+        if not isinstance(time, str):
+            raise ValueError("Datetime 'time' must be a string")
+        if not isinstance(time_zone, str):
+            raise ValueError("Datetime 'time_zone' must be a string")
+        return Datetime(date=date, time=time, time_zone=time_zone)
+
+    def value(self) -> datetime:
+        return datetime_from_str(self.date, self.time, self.time_zone)
+    
+@dataclass
+class Event:
+    datetime: Datetime
+    location: GeoPosition
+    svg_theme: Optional[svg.SvgTheme] = None
+    
+    @staticmethod
+    def from_json(data: dict) -> Self:
+        dt = Datetime.from_json(data["datetime"])
+        loc = GeoPosition.from_json(data["location"])
+        theme = svg.SvgTheme.from_json(data["svg_theme"]) if "svg_theme" in data else svg.SvgTheme()
+        return Event(datetime=dt, location=loc, svg_theme=theme)
+    
+    def dt_loc(self) -> DatetimeLocation:
+        print(f"DEBUG: Event.dt_loc: datetime={self.datetime}, location={self.location}")
+        return DatetimeLocation(datetime=self.datetime.value(), location=self.location)
+    
+@dataclass
+class JsonInput:
+    name: str
+    event: Event
+    
+    @staticmethod
+    def from_json(data: dict) -> Self:
+        if "name" not in data or not isinstance(data["name"], str):
+            raise ValueError("JsonInput must have a string 'name' field")
+        if "event" not in data or not isinstance(data["event"], dict):
+            raise ValueError("JsonInput must have an 'event' field of type object")
+        event = Event.from_json(data["event"])
+        return JsonInput(name=data["name"], event=event)
+    
 
 def main():
     """
@@ -288,7 +345,6 @@ def main():
     """
     _init_logging()
     parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
-
 
     direct_args = parser.add_argument_group(
         "Параметры натальной карты",
@@ -332,8 +388,10 @@ def main():
         type=str,
         help="Имя входного файла с параметрами (пока не реализовано)",
     )
-    
-    output_group = parser.add_argument_group("Параметры выходных файлов", "Настройка типов выходных файлов")
+
+    output_group = parser.add_argument_group(
+        "Параметры выходных файлов", "Настройка типов выходных файлов"
+    )
     output_group.add_argument(
         "-o",
         "--output",
@@ -357,7 +415,8 @@ def main():
         "--pdf", action="store_true", help="Генерировать PDF (по умолчанию False)"
     )
     output_group.add_argument(
-        "-P", "--no-print",
+        "-P",
+        "--no-print",
         action="store_true",
         help="Не выводить текстовую информацию в консоль (по умолчанию False)",
     )
@@ -373,7 +432,8 @@ def main():
     if args.verbose:
         logger.setLevel(logging.DEBUG)
         logger.debug("Включён подробный вывод")
-    
+    svg_theme = None
+
     if not args.name and not args.input_file:
         print("Ошибка: нужно указать имя человека (-n) или входной файл (-i)")
         return
@@ -392,12 +452,22 @@ def main():
         except (ValueError, OSError) as e:
             print(f"Ошибка чтения JSON файла {json_file}: {e}")
             return
-        name, dt_loc, _ = parse_json_input(json_data)
+        input_value : JsonInput = JsonInput.from_json(json_data)
+        name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
+        # name, dt_loc, extra = parse_json_input(json_data)
         output_name = (
             args.output
             if args.output
             else os.path.basename(json_file).rsplit(".", 1)[0]
         )
+        logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
+        # if "svg_theme" in extra:
+        #     logging.debug("Разбор темы SVG из JSON")
+        #     try:
+        #         svg_theme = svg.SvgTheme.from_json(extra["svg_theme"])
+        #     except ValueError as e:
+        #         print(f"Ошибка разбора темы SVG из JSON: {e}")
+        #         return
     else:
         name = args.name
         try:
@@ -416,7 +486,7 @@ def main():
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)
         output_name = args.output if args.output else args.name
-    
+
     output_params = OutputParams(
         png_path=f"{output_name}.png" if args.png else None,
         svg_path=f"{output_name}.svg" if args.svg else None,
@@ -425,13 +495,16 @@ def main():
         pdf_path=f"{output_name}.pdf" if args.pdf else None,
         print_flag=not args.no_print,
     )
-    
+
     process_data(
-        person_name=name, dt_loc=dt_loc, output_params=output_params
+        person_name=name,
+        dt_loc=dt_loc,
+        output_params=output_params,
+        svg_theme=svg_theme,
     )
 
 
 if __name__ == "__main__":
-    
+
     logger.error("Запуск pyastro")
     main()

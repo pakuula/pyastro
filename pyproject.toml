@@ -9,7 +9,7 @@ description = "Простой проект астрологических выч
 authors = [
     { name = "Nikolai Pakulin" }
 ]
-requires-python = ">=3.7"
+requires-python = ">=3.12"
 
 dependencies = [
     "pyswisseph>=2.10",

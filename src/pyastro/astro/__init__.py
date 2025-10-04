@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo
 
 import swisseph as swe
 
+from pyastro.util.angle import parse_lat, parse_lon
+
 swe.set_ephe_path(
     os.path.dirname(__file__)
 )  # Set the path to Swiss Ephemeris data files
@@ -21,6 +23,42 @@ class GeoPosition:
     longitude: float  # градусы, позитивное значение означает восточное полушарие
     elevation: float = 0.0  # высота над уровнем моря в метрах
 
+    @staticmethod
+    def from_json(data: dict) -> Self:
+        """Создает GeoPosition из JSON-объекта."""
+        if "latitude" not in data or "longitude" not in data:
+            raise ValueError("GeoPosition requires 'latitude' and 'longitude' fields")
+        if isinstance(data["latitude"], (int, float)):
+            latitude = float(data["latitude"])
+        elif isinstance(data["latitude"], str):
+            latitude = parse_lat(data["latitude"])
+        else:
+            raise ValueError(
+                f"Invalid type for 'latitude': expected str or float, got {type(data['latitude'])}"
+            )
+        if isinstance(data["longitude"], (int, float)):
+            longitude = float(data["longitude"])
+        elif isinstance(data["longitude"], str):
+            longitude = parse_lon(data["longitude"])
+        else:
+            raise ValueError(
+                f"Invalid type for 'longitude': expected str or float, got {type(data['longitude'])}"
+            )
+        data["latitude"] = latitude
+        data["longitude"] = longitude
+        if "elevation" in data:
+            if not isinstance(data["elevation"], (int, float)):
+                raise ValueError(
+                    f"Invalid type for 'elevation': expected float, got {type(data['elevation'])}"
+                )
+            elevation = float(data["elevation"])
+        else:
+            elevation = 0.0
+        return GeoPosition(
+            latitude=latitude,
+            longitude=longitude,
+            elevation=elevation,
+        )
 
 class Planet(Enum):
     """Идентификаторы планет, используются в Swiss Ephemeris."""
