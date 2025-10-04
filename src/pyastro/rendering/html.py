@@ -31,39 +31,31 @@ def to_html(
         svg_chart = svg.to_svg(chart, svg.SvgTheme())
 
     # HTML header
-    writeln("<!DOCTYPE html>")
-    writeln('<html lang="ru">')
-    writeln("<head>")
-    writeln('    <meta charset="UTF-8">')
     writeln(
-        '    <meta name="viewport" content="width=device-width, initial-scale=1.0">'
+        """<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Астрологическая карта</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }
+        h2 { color: #555; margin-top: 30px; }
+        table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        tr { page-break-inside: avoid; }
+        th { background-color: #f2f2f2; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .chart-info { background-color: #f5f5f5; padding: 15px; border-radius: 15px; margin: 20px 0; }
+        .chart-info ul { list-style-type: none; padding: 0; }
+        .chart-info li { margin: 5px 0; }
+        .chart-container { text-align: center; margin: 30px 0; }
+        .chart-container svg { max-width: 100%; height: auto; }
+    </style>
+</head>
+<body>"""
     )
-    writeln("    <title>Астрологическая карта</title>")
-    writeln("    <style>")
-    writeln(
-        "        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }"
-    )
-    writeln(
-        "        h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }"
-    )
-    writeln("        h2 { color: #555; margin-top: 30px; }")
-    writeln("        table { border-collapse: collapse; width: 100%; margin: 20px 0; }")
-    writeln(
-        "        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }"
-    )
-    writeln("        th { background-color: #f2f2f2; font-weight: bold; }")
-    writeln("        tr:nth-child(even) { background-color: #f9f9f9; }")
-    writeln(
-        "        .chart-info { background-color: #f5f5f5; padding: 15px; border-radius: 15px; margin: 20px 0; }"
-    )
-    writeln("        .chart-info ul { list-style-type: none; padding: 0; }")
-    writeln("        .chart-info li { margin: 5px 0; }")
-    writeln("        .chart-container { text-align: center; margin: 30px 0; }")
-    writeln("        .chart-container svg { max-width: 100%; height: auto; }")
-    writeln("    </style>")
-    writeln("</head>")
-    writeln("<body>")
-
     # Main content
     writeln("<h1>Астрологическая карта</h1>")
 
