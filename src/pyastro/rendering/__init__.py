@@ -1,3 +1,3 @@
-from .svg import to_svg, SvgTheme
+from .svg import chart_to_svg, to_svg, SvgTheme
 
-__all__ = ["to_svg", "SvgTheme"]
+__all__ = ["chart_to_svg", "to_svg", "SvgTheme"]

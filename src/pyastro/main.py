@@ -82,7 +82,7 @@ def print_chart_info(chart: Chart):
             f"{aspect.planet1.name} {aspect.planet1.symbol} - "
             f"{aspect.planet2.name} {aspect.planet2.symbol}: "
             f"{aspect.kind.name} {aspect.kind.symbol} {Angle(aspect.angle)} "
-            f"(oрб: {Angle(aspect.orb)})"
+            f"(орб: {Angle(aspect.orb)})"
         )
 
 
@@ -110,15 +110,17 @@ def process_data(
 
     if svg_theme is None:
         svg_theme = svg.SvgTheme()
-    svg_chart = svg.to_svg(
+    svg_chart = svg.chart_to_svg(
         chart,
         svg_theme,
         angle=-chart.ascendant,
     )
+    svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
+    
     logger.debug("Output params: %s", output_params)
     if output_params.svg_path:
         with open(output_params.svg_path, "w", encoding="utf-8") as f:
-            f.write(svg_chart)
+            f.write(svg_doc)
         logger.info("SVG сохранён в %s", output_params.svg_path)
     if output_params.mdown_path:
         mdown_path = output_params.mdown_path
@@ -130,6 +132,28 @@ def process_data(
             mdown = markdown.to_markdown(chart, svg_path=os.path.basename(svg_path))
             f.write(mdown)
         logger.info("Markdown сохранён в %s", output_params.mdown_path)
+    
+    if output_params.html_path:
+        html_doc = html.to_html(chart, svg_chart=svg_chart)
+        with open(output_params.html_path, "w", encoding="utf-8") as f:
+            f.write(html_doc)
+        logger.info("HTML сохранён в %s", output_params.html_path)
+    if output_params.png_path:
+        try:
+            import cairosvg  # type: ignore
+        except ImportError as e:  # pragma: no cover
+            logging.error("Не установлен cairosvg, пропуск PNG: %s", e)
+        else:
+            try:
+                cairosvg.svg2png(
+                    bytestring=svg_doc.encode("utf-8"),
+                    write_to=output_params.png_path,
+                    output_width=2400,
+                    output_height=1600,
+                )
+                logger.info("PNG сохранён в %s", output_params.png_path)
+            except (ValueError, OSError) as e:  # pragma: no cover
+                logging.error("Ошибка конвертации PNG: %s", e)
     if output_params.pdf_path:
         with NamedTemporaryFile(
             delete=True, suffix=".svg"
@@ -146,28 +170,6 @@ def process_data(
             pdf.to_pdf(tmp_md_file.name, output_params.pdf_path)
         # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
         logger.info("PDF сохранён в %s", output_params.pdf_path)
-    if output_params.html_path:
-        html_doc = html.to_html(chart, svg_chart=svg_chart)
-        with open(output_params.html_path, "w", encoding="utf-8") as f:
-            f.write(html_doc)
-        logger.info("HTML сохранён в %s", output_params.html_path)
-    if output_params.png_path:
-        try:
-            import cairosvg  # type: ignore
-        except ImportError as e:  # pragma: no cover
-            logging.error("Не установлен cairosvg, пропуск PNG: %s", e)
-        else:
-            try:
-                cairosvg.svg2png(
-                    bytestring=svg_chart.encode("utf-8"),
-                    write_to=output_params.png_path,
-                    output_width=1600,
-                    output_height=1600,
-                )
-                logger.info("PNG сохранён в %s", output_params.png_path)
-            except (ValueError, OSError) as e:  # pragma: no cover
-                logging.error("Ошибка конвертации PNG: %s", e)
-
 
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
@@ -238,10 +240,11 @@ def parse_json_location(loc_json: dict) -> GeoPosition:
         raise ValueError("JSON location должен содержать поле 'latitude'")
     if not "longitude" in loc_json:
         raise ValueError("JSON location должен содержать поле 'longitude'")
-    return location_from_str(loc_json["latitude"], loc_json["longitude"])
+    place = loc_json.get("place", None)
+    return location_from_str(loc_json["latitude"], loc_json["longitude"], place)
 
 
-def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
+def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> GeoPosition:
     """Разбор строки широты и долготы в объект GeoPosition.
 
     Возможные форматы:
@@ -271,7 +274,8 @@ def location_from_str(lat_str: str, lon_str: str) -> GeoPosition:
     else:
         raise ValueError(f"Неверный тип долготы: {type(lon_str)}")
 
-    return GeoPosition(latitude=latitude, longitude=longitude)
+    print(f"DEBUG: Parsed location: lat={latitude}, lon={longitude}, place={place}")
+    return GeoPosition(latitude=latitude, longitude=longitude, place=place if place else "")
 
 
 def _init_logging():

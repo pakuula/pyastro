@@ -28,7 +28,7 @@ def to_html(
     elif svg_chart:
         pass
     else:
-        svg_chart = svg.to_svg(chart, svg.SvgTheme())
+        svg_chart = svg.chart_to_svg(chart, svg.SvgTheme())
 
     # HTML header
     writeln(

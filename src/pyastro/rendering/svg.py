@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from math import cos, sin, radians, pi
-from typing import Any, get_args, get_origin
+from typing import Any, Optional, get_args, get_origin
+
+from pyastro.util.angle import Angle, Latitude, Longitude
 
 from ..astro import Chart, AspectKind, Planet, ZodiacSign
 
@@ -444,7 +446,9 @@ def _conjunction_components(chart: Chart) -> list[list[Planet]]:
     return comps
 
 
-def to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> str:
+def chart_to_svg(
+    chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0
+) -> str:
     """Возвращает SVG строку натальной карты.
 
     angle: на сколько градусов ПОВЕРНУТЬ КОЛЬЦО ЗНАКОВ ЗОДИАКА ПРОТИВ часовой стрелки (только фоновые сектора, символы знаков и граничные 30° тики). Планеты, дома и аспекты остаются в гео-долготах без сдвига.
@@ -496,7 +500,7 @@ def to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> s
         font-style: normal;
     }
     text.zodiac {
-      /* font-family: "FreeSerif", sans-serif !important; */
+      font-family: "Noto Sans Symbol", serif;
       font-weight: bold;
       font-size="{theme.sign_font_size}" 
       fill="{theme.sign_color}"
@@ -734,7 +738,7 @@ def to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> s
         planet_symbol = f"{pp.planet.symbol}{extra}"
 
         ap(
-            f'<text x="{sx:.2f}" y="{sy:.2f}" '
+            f'<text class="zodiac" x="{sx:.2f}" y="{sy:.2f}" '
             f'font-size="{theme.planet_font_size}" fill="{theme.planet_color}" '
             f'text-anchor="middle" dominant-baseline="middle">{planet_symbol}</text>'
         )
@@ -750,18 +754,84 @@ def to_svg(chart: Chart, theme: SvgTheme | None = None, angle: float = 0.0) -> s
     return "\n".join(out)
 
 
-def asc_to_angle(chart: Chart, target: float) -> float:
-    """Вычисляет угол поворота кольца зодиака, чтобы асцендент (дом 1) оказался на заданном направлении target (в градусах, 0°=3 часа, CCW).
+def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None = None):
+    """Возвращает SVG строку документа натальной карты - натальная карта с информацией о человеке и таблицами планет и домов."""
+    if svg_chart is None:
+        round_chart = chart_to_svg(chart, theme)
+    else:
+        round_chart = svg_chart
 
-    Возвращает угол в градусах CCW.
-    """
-    asc_cusp = next((h for h in chart.houses if h.house_number == 1), None)
-    if not asc_cusp:
-        return 0.0
-    asc_angle = asc_cusp.cusp_longitude % 360
-    # Нужно повернуть так, чтобы asc_angle оказался на target
-    rotation = (target - asc_angle) % 360.0
-    return rotation
+    doc = []
+    ap = doc.append
+
+    width = theme.width + 400 if theme else 1200
+    height = theme.height if theme else 800
+    ap(
+        f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">"""
+    )
+    ap('<style> text.text { font-family: "FreeSerif", serif; } </style>')
+
+    ap(f'<svg x="200" y="0">{round_chart}</svg>')
+    ap('<svg x="0" y="0">')
+    ap(
+        f'<rect x="0" y="0" width="200" height="{height}" fill="{theme.background if theme else "#fff"}" />'
+    )
+    ap('<text class="text" x="10" y="40" font-size="24" font-weight="bold">Натальная карта</text>')
+    ap(
+        f'<text class="text" x="10" y="80" font-size="18">Имя: {chart.name if chart.name else "Не указано"}</text>'
+    )
+    ap(
+        f'<text class="text" x="10" y="110" font-size="18">'
+        f'Дата: {chart.datetime.strftime("%Y-%m-%d %H:%M")} {chart.datetime.tzinfo}'
+        f'</text>'
+    )
+    ap(
+        f'<text class="text" x="10" y="140" font-size="20">'
+        f'Место: {chart.location.place if chart.location.place else "Не указано"} '
+        # f"({Latitude( chart.location.latitude)}, {Longitude(chart.location.longitude)})"
+        f"</text>"
+    )
+    ap(f'<text class="text" x="20" y="165" font-size="18">Широта: {Latitude(chart.location.latitude)}</text>')
+    ap(f'<text class="text" x="20" y="190" font-size="18">Долгота: {Longitude(chart.location.longitude)}</text>')
+    ap('<text class="text" x="10" y="240" font-size="16" font-style="italic">Тропический зодиак</text>')
+    ap('<text class="text" x="10" y="265" font-size="16" font-style="italic">Система домов: Плацидус</text>')
+    ap("</svg>")
+    ap(f'<svg x="{theme.width + 200 if theme else 1000}" y="0">')
+    ap(
+        f'<rect x="0" y="0" width="200" height="{height}" fill="{theme.background if theme else "#fff"}" />'
+    )
+    ap('<text class="text" x="0" y="40" font-size="20" font-weight="bold">Планеты</text>')
+    start_y = 70
+    line_h = 25
+    for pp in sorted(chart.planet_positions, key=lambda p: p.planet.code):
+        sign = pp.zodiac_sign
+        angle = pp.angle_in_sign()
+        retro = "R" if pp.is_retrograde() else ""
+        ap(f'<g transform="translate(0,{start_y})">'
+           f'<text font-size="18">{pp.planet.symbol}</text>'
+           f'<text class="text" font-size="18" x="25">{retro}</text>'
+           f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
+           f'<text font-size="18" x="140">{sign.symbol}</text>'
+           f'</g>')
+        start_y += line_h
+    
+    start_y += 20
+    ap(f'<text x="0" y="{start_y}" font-size="20" font-weight="bold">Дома</text>')
+    start_y += 30
+    for house_pos in sorted(chart.houses, key=lambda h: h.house_number):
+        house_name = house_pos.roman_number
+        sign = house_pos.zodiac_sign
+        angle = house_pos.angle_in_sign
+        ap(f'<g transform="translate(0,{start_y})">'
+           f'<text font-size="18">{house_name}</text>'
+           f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
+           f'<text font-size="18" x="140">{sign.symbol}</text>'
+           f'</g>')
+        start_y += line_h
+    ap("</svg>")
+    ap("</svg>")
+
+    return "\n".join(doc)
 
 
-__all__ = ["SvgTheme", "to_svg", "asc_to_angle"]
+__all__ = ["SvgTheme", "chart_to_svg", "to_svg"]
