@@ -314,7 +314,6 @@ class Event:
         return Event(datetime=dt, location=loc, svg_theme=theme)
     
     def dt_loc(self) -> DatetimeLocation:
-        print(f"DEBUG: Event.dt_loc: datetime={self.datetime}, location={self.location}")
         return DatetimeLocation(datetime=self.datetime.value(), location=self.location)
     
 @dataclass
