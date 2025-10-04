@@ -22,6 +22,7 @@ class GeoPosition:
     latitude: float  # градусы, позитивное значение означает северное полушарие
     longitude: float  # градусы, позитивное значение означает восточное полушарие
     elevation: float = 0.0  # высота над уровнем моря в метрах
+    place: str = ""  # название места
 
     @staticmethod
     def from_json(data: dict) -> Self:
@@ -54,12 +55,87 @@ class GeoPosition:
             elevation = float(data["elevation"])
         else:
             elevation = 0.0
+        if "place" in data:
+            if not isinstance(data["place"], str):
+                raise ValueError(
+                    f"Invalid type for 'place': expected str, got {type(data['place'])}"
+                )
+            place = data["place"]
+        else:
+            place = ""
         return GeoPosition(
             latitude=latitude,
             longitude=longitude,
             elevation=elevation,
+            place=place,
         )
-
+        
+# swisseph/swephexp.h
+# /*
+#  * planet numbers for the ipl parameter in swe_calc()
+#  */
+# #define SE_ECL_NUT      -1
+# 
+# #define SE_SUN          0
+# #define SE_MOON         1
+# #define SE_MERCURY      2
+# #define SE_VENUS        3
+# #define SE_MARS         4
+# #define SE_JUPITER      5
+# #define SE_SATURN       6
+# #define SE_URANUS       7
+# #define SE_NEPTUNE      8
+# #define SE_PLUTO        9
+# #define SE_MEAN_NODE    10
+# #define SE_TRUE_NODE    11
+# #define SE_MEAN_APOG    12
+# #define SE_OSCU_APOG    13
+# #define SE_EARTH        14
+# #define SE_CHIRON       15
+# #define SE_PHOLUS       16
+# #define SE_CERES        17
+# #define SE_PALLAS       18
+# #define SE_JUNO         19
+# #define SE_VESTA        20
+# #define SE_INTP_APOG    21
+# #define SE_INTP_PERG    22
+#
+# #define SE_NPLANETS     23
+#
+# #define SE_PLMOON_OFFSET   9000
+# #define SE_AST_OFFSET   10000
+# #define SE_VARUNA   (SE_AST_OFFSET + 20000)
+#
+# #define SE_FICT_OFFSET  	40
+# #define SE_FICT_OFFSET_1  	39
+# #define SE_FICT_MAX  	       999
+# #define SE_NFICT_ELEM           15
+#
+# #define SE_COMET_OFFSET 1000
+#
+# #define SE_NALL_NAT_POINTS      (SE_NPLANETS + SE_NFICT_ELEM)
+#
+# /* Hamburger or Uranian "planets" */
+# #define SE_CUPIDO       	40
+# #define SE_HADES        	41
+# #define SE_ZEUS         	42
+# #define SE_KRONOS       	43
+# #define SE_APOLLON      	44
+# #define SE_ADMETOS      	45
+# #define SE_VULKANUS     	46
+# #define SE_POSEIDON     	47
+# /* other fictitious bodies */
+# #define SE_ISIS         	48
+# #define SE_NIBIRU       	49
+# #define SE_HARRINGTON           50
+# #define SE_NEPTUNE_LEVERRIER    51
+# #define SE_NEPTUNE_ADAMS        52
+# #define SE_PLUTO_LOWELL         53
+# #define SE_PLUTO_PICKERING      54
+# #define SE_VULCAN      		55
+# #define SE_WHITE_MOON  		56
+# #define SE_PROSERPINA  		57
+# #define SE_WALDEMATH  		58
 class Planet(Enum):
     """Идентификаторы планет, используются в Swiss Ephemeris."""
 
@@ -73,9 +149,33 @@ class Planet(Enum):
     URANUS = (7, "♅")
     NEPTUNE = (8, "♆")
     PLUTO = (9, "♇") # символ ⯓ не поддерживается большинством шрифтов
-    # CHIRON = (15, "⚷")
     NORTH_NODE = (10, "☊")
-    # SOUTH_NODE = (11, "☋")
+    SOUTH_NODE = (10, "☋")
+    # CHIRON = (15, "⚷")
+    # PHOLUS = (16, "⯛")  # символ U+2BDB
+    # CERES = (17, "⚳")  # символ U+26B3
+    # PALLAS = (18, "⚴") # символ U+26B4
+    # JUNO = (19, "⚵") # символ U+26B5
+    # VESTA = (20, "⚶") # символ U+26B6
+    # CUPIDO = (40, "⯠")  # символ U+2BE0
+    # HADES = (41, "⯡") # символ U+2BE1
+    # ZEUS = (42, "⯢") # символ U+2BE2
+    # KRONOS = (43, "⯣") # символ U+2BE3
+    # APOLLON = (44, "⯤") # символ U+2BE4
+    # ADMETOS = (45, "⯥") # символ U+2BE5
+    # VULKANUS = (46, "⯦") # символ U+2BE6
+    # POSEIDON = (47, "⯧") # символ U+2BE7
+    # ISIS = (48, "Is")
+    # NIBIRU = (49, "Nb")
+    # HARRINGTON = (50, "Hr")
+    # NEPTUNE_LEVERRIER = (51, "♆L")
+    # NEPTUNE_ADAMS = (52, "♆A")
+    # PLUTO_LOWELL = (53, "♇L")
+    # PLUTO_PICKERING = (54, "♇P")
+    # VULCAN = (55, "√")
+    # WHITE_MOON = (56, "⯝") # White Moon Lilith (U+2B5D)
+    # PROSERPINA = (57, "⯘") # Proserpina (U+2BD8)
+    # WALDEMATH = (58, "⚸") # Black Moon Lilith
 
     @property
     def code(self) -> int:
@@ -91,6 +191,10 @@ class Planet(Enum):
         if isinstance(other, Planet):
             return self.code < other.code
         return NotImplemented
+    
+    def is_south_node(self) -> bool:
+        """Возвращает True, если планета - Южный узел."""
+        return self == Planet.SOUTH_NODE
 
 class HouseSystem(Enum):
     """Идентификаторы систем домов, используются в Swiss Ephemeris."""
@@ -186,13 +290,14 @@ class PlanetPosition:
     @staticmethod
     def from_swe_data(planet: Planet, swe_data: list[float]) -> Self:
         """Создает PlanetPosition из данных, возвращаемых Swiss Ephemeris."""
+        latitude=swe_data[1] % 90 if swe_data[1] >= 0 else -(abs(swe_data[1]) % 90)
         return PlanetPosition(
             planet=planet,
-            longitude=swe_data[0] % 360,
-            latitude=swe_data[1] % 90 if swe_data[1] >= 0 else -(abs(swe_data[1]) % 90),
+            longitude=swe_data[0] % 360 if not planet.is_south_node() else (swe_data[0] + 180) % 360,
+            latitude=latitude if not planet.is_south_node() else -latitude,
             distance=swe_data[2],
             longitude_speed=swe_data[3],
-            latitude_speed=swe_data[4],
+            latitude_speed=swe_data[4] if not planet.is_south_node() else -swe_data[4],
             distance_speed=swe_data[5],
         )
 
@@ -288,17 +393,17 @@ class DatetimeLocation:
     def to_julian_day(self) -> float:
         """Преобразует дату и время в юлианскую дату."""
         utc_datetime = self.datetime.astimezone(ZoneInfo("UTC"))  # Convert to UTC
-        return swe.julday(
+        return swe.julday( # pylint: disable=c-extension-no-member
             utc_datetime.year,
             utc_datetime.month,
             utc_datetime.day,
             utc_datetime.hour + utc_datetime.minute / 60 + utc_datetime.second / 3600,
-        )
+        ) 
 
     def get_planet_position(self, planet: Planet) -> tuple:
         """Возвращает позицию планеты в виде (долгота, широта, расстояние от Земли)."""
         jd = self.to_julian_day()
-        swe_data, _ = swe.calc_ut(jd, planet.code)
+        swe_data, _ = swe.calc_ut(jd, planet.code) # pylint: disable=c-extension-no-member
 
         return PlanetPosition.from_swe_data(planet, swe_data)
 
@@ -355,6 +460,10 @@ ASPECT_ORBS = {
     AspectKind.TRINE: 6.0,
     AspectKind.OPPOSITION: 8.0,
 }
+PLANET_ORBS = {
+    Planet.SOUTH_NODE: 1.5,
+    Planet.NORTH_NODE: 1.5,
+}
 
 
 @dataclass
@@ -392,6 +501,14 @@ class Aspect:
         max_orb: float = DEFAULT_ORB,
     ) -> Self | None:
         """Возвращает аспект между двумя планетами или None, если аспекта нет."""
+        if planet1.planet == planet2.planet:
+            return None
+        if planet1.planet.is_south_node() or planet2.planet.is_south_node():
+            return None
+        if planet1.planet in PLANET_ORBS:
+            max_orb = min(max_orb, PLANET_ORBS[planet1.planet])
+        if planet2.planet in PLANET_ORBS:
+            max_orb = min(max_orb, PLANET_ORBS[planet2.planet])
         angle = abs(planet1.longitude - planet2.longitude) % 360
         if angle > 180:
             angle = 360 - angle
@@ -491,3 +608,13 @@ class Chart:
 
         self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(self.planet_positions, self.houses)
         self.house_planets: dict[int, list[Planet]] = get_house_planets(self.planet_positions, self.houses)
+
+    @property
+    def datetime(self) -> datetime:
+        """Возвращает дату и время карты."""
+        return self.dt_loc.datetime
+    
+    @property
+    def location(self) -> GeoPosition:
+        """Возвращает географическое положение карты."""
+        return self.dt_loc.location
