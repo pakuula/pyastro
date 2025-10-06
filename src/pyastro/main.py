@@ -89,7 +89,8 @@ def print_chart_info(chart: Chart):
 @dataclass
 class OutputParams:
     png_path: Optional[str] = None
-    svg_path: Optional[str] = None
+    svg_doc_path: Optional[str] = None
+    svg_chart_path: Optional[str] = None
     mdown_path: Optional[str] = None
     html_path: Optional[str] = None
     pdf_path: Optional[str] = None
@@ -118,10 +119,14 @@ def process_data(
     svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
     
     logger.debug("Output params: %s", output_params)
-    if output_params.svg_path:
-        with open(output_params.svg_path, "w", encoding="utf-8") as f:
+    if output_params.svg_chart_path:
+        with open(output_params.svg_chart_path, "w", encoding="utf-8") as f:
+            f.write(svg_chart)
+        logger.info("SVG диаграмма сохранёна в %s", output_params.svg_chart_path)
+    if output_params.svg_doc_path:
+        with open(output_params.svg_doc_path, "w", encoding="utf-8") as f:
             f.write(svg_doc)
-        logger.info("SVG сохранён в %s", output_params.svg_path)
+        logger.info("SVG сохранён в %s", output_params.svg_doc_path)
     if output_params.mdown_path:
         mdown_path = output_params.mdown_path
         svg_path = output_params.mdown_path.rsplit(".", 1)[0] + ".svg"
@@ -408,8 +413,12 @@ def main():
         "--png", action="store_true", help="Генерировать PNG (по умолчанию False)"
     )
     output_group.add_argument(
-        "--svg", action="store_true", help="Генерировать SVG (по умолчанию False)"
+        "--svg", action="store_true", help="Генерировать SVG документ (по умолчанию False)"
     )
+    output_group.add_argument(
+        "--svg-chart", action="store_true", help="Генерировать SVG диаграмму (по умолчанию False)"
+    )
+    
     output_group.add_argument(
         "--text", action="store_true", help="Генерировать Markdown (по умолчанию False)"
     )
@@ -494,7 +503,8 @@ def main():
 
     output_params = OutputParams(
         png_path=f"{output_name}.png" if args.png else None,
-        svg_path=f"{output_name}.svg" if args.svg else None,
+        svg_chart_path=f"{output_name}_chart.svg" if args.svg_chart else None,
+        svg_doc_path=f"{output_name}.svg" if args.svg else None,
         mdown_path=f"{output_name}.md" if args.text else None,
         html_path=f"{output_name}.html" if args.html else None,
         pdf_path=f"{output_name}.pdf" if args.pdf else None,
