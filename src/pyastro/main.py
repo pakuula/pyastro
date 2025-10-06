@@ -1,199 +1,21 @@
 #! /usr/bin/env python3
 import argparse
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime
 import json
 import logging
 import os.path
-import shutil
-import subprocess
-from tempfile import NamedTemporaryFile
 from typing import Optional, Self
-from zoneinfo import ZoneInfo
 
-from .rendering import svg, markdown, html, pdf
+import yaml
 
-from .astro import Chart, DatetimeLocation, GeoPosition, HouseSystem
-from .util import CoordError, parse_lat, parse_lon, Angle
+from .astro import DatetimeLocation, GeoPosition
+from .rendering import svg
+from .util import CoordError, parse_lat, parse_lon
+from .util import parse_time_string, parse_timezone
+from .processor import process_data, OutputParams
 
 logger = logging.getLogger(__name__)
-
-# Helper to convert integer to Unicode subscript digits (0-29)
-_SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
-
-_ROMAN = {
-    1: "I",
-    2: "II",
-    3: "III",
-    4: "IV",
-    5: "V",
-    6: "VI",
-    7: "VII",
-    8: "VIII",
-    9: "IX",
-    10: "X",
-    11: "XI",
-    12: "XII",
-}
-
-
-def int_to_subscript(n: int) -> str:
-    n = n % 30
-    return str(n).translate(_SUB_MAP)
-
-
-def to_roman(n: int) -> str:
-    return _ROMAN.get(n, str(n))
-
-
-def print_chart_info(chart: Chart):
-    print(f"Астрологическая карта для: {chart.name}")
-    dt_loc = chart.dt_loc
-    print(f"Дата и время: {dt_loc.datetime.isoformat()}")
-    print(
-        f"Местоположение: широта={dt_loc.location.latitude}, долгота={dt_loc.location.longitude}\n"
-    )
-    print("Позиции планет:")
-    for planet_pos in chart.planet_positions:
-        deg_sub = int_to_subscript(round(planet_pos.angle_in_sign()))
-        print(
-            f"{planet_pos.planet.name:10s}: "
-            f"{planet_pos.planet.symbol}{deg_sub} "
-            f"Долгота={Angle.Lon(planet_pos.longitude)}, "
-            f"Широта={Angle.Lat(planet_pos.latitude)}, "
-            f"знак={planet_pos.zodiac_sign.symbol}, "
-            f"угол в знаке={Angle(planet_pos.angle_in_sign())}, "
-            f"Ретроградность={'Да' if planet_pos.is_retrograde() else 'Нет'}"
-        )
-
-    print("\nКуспиды домов (Placidus):")
-    for house_cusp in chart.dt_loc.get_house_cusps(HouseSystem.PLACIDUS):
-        deg_sub = int_to_subscript(round(house_cusp.angle_in_sign))
-        roman = to_roman(house_cusp.house_number)
-        print(
-            f"Дом {roman}{deg_sub}:"
-            f" Куспид={Angle(house_cusp.cusp_longitude)}, "
-            f"Длина={Angle(house_cusp.length)}, "
-            f"Знак={house_cusp.zodiac_sign.symbol}, "
-            f"Угол={Angle(house_cusp.angle_in_sign)}"
-        )
-
-    print("\nАспекты между планетами:")
-    for aspect in chart.aspects:
-        print(
-            f"{aspect.planet1.name} {aspect.planet1.symbol} - "
-            f"{aspect.planet2.name} {aspect.planet2.symbol}: "
-            f"{aspect.kind.name} {aspect.kind.symbol} {Angle(aspect.angle)} "
-            f"(орб: {Angle(aspect.orb)})"
-        )
-
-
-@dataclass
-class OutputParams:
-    png_path: Optional[str] = None
-    svg_doc_path: Optional[str] = None
-    svg_chart_path: Optional[str] = None
-    mdown_path: Optional[str] = None
-    html_path: Optional[str] = None
-    pdf_path: Optional[str] = None
-    print_flag: bool = True
-
-
-def process_data(
-    person_name: str,
-    dt_loc: DatetimeLocation,
-    output_params: OutputParams,
-    svg_theme: Optional[svg.SvgTheme] = None,
-):
-    """Генерация астрологической карты и вывод отчётов в разные форматы."""
-    chart = Chart(person_name, dt_loc)
-
-    if output_params.print_flag:
-        print_chart_info(chart)
-
-    if svg_theme is None:
-        svg_theme = svg.SvgTheme()
-    svg_chart = svg.chart_to_svg(
-        chart,
-        svg_theme,
-        angle=-chart.ascendant,
-    )
-    svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
-    
-    logger.debug("Output params: %s", output_params)
-    if output_params.svg_chart_path:
-        with open(output_params.svg_chart_path, "w", encoding="utf-8") as f:
-            f.write(svg_chart)
-        logger.info("SVG диаграмма сохранёна в %s", output_params.svg_chart_path)
-    if output_params.svg_doc_path:
-        with open(output_params.svg_doc_path, "w", encoding="utf-8") as f:
-            f.write(svg_doc)
-        logger.info("SVG сохранён в %s", output_params.svg_doc_path)
-    if output_params.mdown_path:
-        mdown_path = output_params.mdown_path
-        svg_path = output_params.mdown_path.rsplit(".", 1)[0] + ".svg"
-        with open(svg_path, "w", encoding="utf-8") as f:
-            f.write(svg_chart)
-            logger.debug("SVG для markdown сохранён в %s", svg_path)
-        with open(mdown_path, "w", encoding="utf-8") as f:
-            mdown = markdown.to_markdown(chart, svg_path=os.path.basename(svg_path))
-            f.write(mdown)
-        logger.info("Markdown сохранён в %s", output_params.mdown_path)
-    
-    if output_params.html_path:
-        html_doc = html.to_html(chart, svg_chart=svg_chart)
-        with open(output_params.html_path, "w", encoding="utf-8") as f:
-            f.write(html_doc)
-        logger.info("HTML сохранён в %s", output_params.html_path)
-    if output_params.png_path:
-        rsvg_convert = shutil.which("rsvg-convert")
-        if rsvg_convert is None:
-            logger.error("Команда 'rsvg-convert' не найдена в PATH, пропуск PNG")
-        else:
-            cmd = [
-                rsvg_convert,
-                # "-w",
-                # "2400",
-                # "-h",
-                # "1600",
-                "-f", "png",
-                "-o",
-                output_params.png_path,
-                "-",
-            ]
-            logger.debug("Running command: %s", " ".join(cmd))
-            subproc = subprocess.run(
-                cmd,
-                input=svg_doc,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if subproc.returncode != 0:
-                logger.error(
-                    "Ошибка генерации PNG с помощью rsvg-convert: %s",
-                    subproc.stderr.strip(),
-                )
-            else:
-                logger.info("PNG сохранён в %s", output_params.png_path)
-        
-    if output_params.pdf_path:
-        with NamedTemporaryFile(
-            delete=True, suffix=".svg"
-        ) as tmp_svg_file, NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file:
-            tmp_svg_file.write(svg_chart.encode("utf-8"))
-            tmp_svg_file.flush()
-            # tmp_svg_file.close()
-
-            mdown = markdown.to_markdown(chart, svg_path=tmp_svg_file.name)
-            tmp_md_file.write(mdown.encode("utf-8"))
-            tmp_md_file.flush()
-            # tmp_md_file.close()
-
-            pdf.to_pdf(tmp_md_file.name, output_params.pdf_path)
-        # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
-        logger.info("PDF сохранён в %s", output_params.pdf_path)
-
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
 
@@ -227,32 +49,20 @@ def parse_json_datetime(dt_json: dict) -> datetime:
         raise ValueError("JSON datetime должен содержать поле 'time'")
     if not "time_zone" in dt_json:
         raise ValueError("JSON datetime должен содержать поле 'tz'")
-    return datetime_from_str(dt_json["date"], dt_json["time"], dt_json["time_zone"])
+    return datetime_from_input(dt_json["date"], dt_json["time"], dt_json["time_zone"])
 
-
-def datetime_from_str(date_str: str, time_str: str, tz_str: str) -> datetime:
+def datetime_from_input(date_input: str|date, time_str: str, tz_str: str) -> datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
     try:
-        date = datetime.fromisoformat(date_str).date()
-    except ValueError as e:
-        raise ValueError(f"Неверный формат даты, ожидается ISO 8601: {date_str}") from e
-    try:
-        time = datetime.strptime(time_str, "%H:%M:%S").time()
-    except ValueError as e:
-        raise ValueError(
-            f"Неверный формат времени, ожидается ISO 8601: {time_str}"
-        ) from e
-    try:
-        if tz_str.startswith(("+", "-")):
-            hours_offset, minutes_offset = map(int, tz_str.split(":"))
-            tzinfo = timezone(
-                offset=timedelta(hours=hours_offset, minutes=minutes_offset),
-                name=f"GMT{'+' if hours_offset > 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
-            )
+        if isinstance(date_input, str):
+            date = datetime.fromisoformat(date_input).date()
         else:
-            tzinfo = ZoneInfo(tz_str)
-    except Exception as e:
-        raise ValueError(f"Неверный часовой пояс: {tz_str}: {e}") from e
+            date = date_input
+    except ValueError as e:
+        raise ValueError(f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}") from e
+    
+    time = parse_time_string(time_str)
+    tzinfo = parse_timezone(tz_str)
     return datetime.combine(date, time, tzinfo=tzinfo)
 
 
@@ -313,19 +123,20 @@ class Datetime:
 
     @staticmethod
     def from_dict(data: dict) -> Self:
-        date = data.get("date")
-        time = data.get("time")
+        date_val = data.get("date")
+        time_val = data.get("time")
         time_zone = data.get("time_zone")
-        if not isinstance(date, str):
-            raise ValueError("Datetime 'date' must be a string")
-        if not isinstance(time, str):
-            raise ValueError("Datetime 'time' must be a string")
+        if not isinstance(date_val, (str, datetime, date)):
+            # YAML парсит вход вида 2025-30-09 как datetime.date
+            raise ValueError(f"Datetime 'date' must be a string, got {type(date_val)}: {date_val}")
+        if not isinstance(time_val, str):
+            raise ValueError(f"Datetime 'time' must be a string, got {type(time_val)}: {time_val}")
         if not isinstance(time_zone, str):
-            raise ValueError("Datetime 'time_zone' must be a string")
-        return Datetime(date=date, time=time, time_zone=time_zone)
+            raise ValueError(f"Datetime 'time_zone' must be a string, got {type(time_zone)}: {time_zone}")
+        return Datetime(date=date_val, time=time_val, time_zone=time_zone)
 
     def value(self) -> datetime:
-        return datetime_from_str(self.date, self.time, self.time_zone)
+        return datetime_from_input(self.date, self.time, self.time_zone)
     
 @dataclass
 class Event:
@@ -363,13 +174,43 @@ def main():
     Главная функция для запуска астрологических расчётов и генерации графики.
 
     Параметры командной строки:
-    -n --name NAME - имя. Нужно сгенерировать вывод NAME.svg, NAME.png (потом добавятся другие виды выводов)
-    -l --location местоположение в формате LAT,LON где LAT широта, float, LON долгота float
-    -d --date дата в формате YYYY-MM-DD
-    -t --time время в формате H:M:S
-    -z --time-zone часовй пояс в формате Europe/Moscow ЛИБО смещение от гринвича в формате -08:00
-    -o --output имя для файлов вывода (без расширения), по умолчанию используется параметр -n
-    --png генерировать PNG, по умолчанию False
+    usage: pyastro [-h] [-n NAME] [-l LOCATION] [-d DATE] [-t TIME] [-z TIME_ZONE] [-i INPUT_FILE] [-o OUTPUT] [--png] [--svg] [--svg-chart] [--text] [--html] [--pdf] [-P] [-v]
+
+    Астрологические расчёты и графика
+
+    options:
+    -h, --help            show this help message and exit
+    -v, --verbose         Выводить отладочную информацию (по умолчанию False)
+
+    Параметры натальной карты:
+    Задание параметров натальной карты в командной строке
+
+    -n NAME, --name NAME  Имя человека, для которого строится карта
+    -l LOCATION, --location LOCATION
+                            Местоположение в формате LAT,LON (широта, долгота)
+    -d DATE, --date DATE  Дата в формате YYYY-MM-DD
+    -t TIME, --time TIME  Время в формате H:M:S
+    -z TIME_ZONE, --time-zone TIME_ZONE
+                            Часовой пояс в формате Europe/Moscow или смещение от гринвича в формате -08:00
+
+    Параметры входных файлов:
+    Задание параметров из входных файлов (пока не реализовано)
+
+    -i INPUT_FILE, --input-file INPUT_FILE
+                            Имя входного файла с параметрами (пока не реализовано)
+
+    Параметры выходных файлов:
+    Настройка типов выходных файлов
+
+    -o OUTPUT, --output OUTPUT
+                            Имя для файлов вывода (без расширения), по умолчанию используется параметр -n
+    --png                 Генерировать PNG (по умолчанию False)
+    --svg                 Генерировать SVG документ (по умолчанию False)
+    --svg-chart           Генерировать SVG диаграмму (по умолчанию False)
+    --text                Генерировать Markdown (по умолчанию False)
+    --html                Генерировать HTML (по умолчанию False)
+    --pdf                 Генерировать PDF (по умолчанию False)
+    -P, --no-print        Не выводить текстовую информацию в консоль (по умолчанию False)
     """
     _init_logging()
     parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
@@ -477,23 +318,39 @@ def main():
             return
 
     if args.input_file:
-        json_file = args.input_file
-        try:
-            with open(json_file, "r", encoding="utf-8") as f:
-                json_data = json.load(f)
-        except (ValueError, OSError) as e:
-            print(f"Ошибка чтения JSON файла {json_file}: {e}")
-            return
-        input_value : JsonInput = JsonInput.from_dict(json_data)
-        name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
-        # name, dt_loc, extra = parse_json_input(json_data)
-        output_name = (
-            args.output
-            if args.output
-            else os.path.basename(json_file).rsplit(".", 1)[0]
-        )
-        logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
-        
+        ext = os.path.basename(args.input_file).rsplit(".", 1)[-1].lower()
+        if ext == "json":
+            json_file = args.input_file
+            try:
+                with open(json_file, "r", encoding="utf-8") as f:
+                    json_data = json.load(f)
+            except (ValueError, OSError) as e:
+                print(f"Ошибка чтения JSON файла {json_file}: {e}")
+                return
+            input_value : JsonInput = JsonInput.from_dict(json_data)
+            name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
+            # name, dt_loc, extra = parse_json_input(json_data)
+            output_name = (
+                args.output
+                if args.output
+                else os.path.basename(json_file).rsplit(".", 1)[0]
+            )
+            logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
+        elif ext in ("yaml", "yml"):
+            print("YAML входные файлы пока не поддерживаются")
+            with open(args.input_file, "r", encoding="utf-8") as f:
+                yaml_data = yaml.safe_load(f)
+            input_value : JsonInput = JsonInput.from_dict(yaml_data)
+            name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
+            output_name = (
+                args.output
+                if args.output
+                else os.path.basename(args.input_file).rsplit(".", 1)[0]
+            )
+            logger.debug("Разобран YAML: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
+        else:
+            print(f"Неизвестный формат входного файла: {ext}")
+            exit(1)
     else:
         name = args.name
         try:
@@ -505,7 +362,7 @@ def main():
             return
         try:
             location = location_from_str(lat_str, lon_str)
-            dt = datetime_from_str(args.date, args.time, args.time_zone)
+            dt = datetime_from_input(args.date, args.time, args.time_zone)
         except ValueError as e:
             print(f"Ошибка: {e}")
             return

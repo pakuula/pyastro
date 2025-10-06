@@ -1,3 +1,4 @@
+import shutil
 from pyastro.astro import Chart
 import subprocess
 import tempfile
@@ -21,15 +22,7 @@ variables:
 """
 
 
-def _which(cmd: str) -> bool:
-    """Нахождение исполняемого файла в PATH"""
-    subproc = subprocess.run(
-        ["which", cmd],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    return subproc.returncode == 0
+_which = shutil.which
 
 def _has_font(fontname: str) -> bool:
     """Проверка наличия шрифта в системе"""
@@ -48,7 +41,7 @@ def _has_font(fontname: str) -> bool:
             return True
     return False
 
-def to_pdf(
+def export_as_pdf(
     markdown_path: str,
     pdf_path: str,
     pandoc_path: str = "pandoc",
@@ -80,7 +73,7 @@ def to_pdf(
         else:
             tmpf.write(PANDOC_DEFAULTS)
         tmpf.flush()
-        tmpf.close()
+        # tmpf.close()
 
         cmd = [pandoc_path, "--defaults", tmpf.name, markdown_path, "-o", pdf_path]
         subproc = subprocess.run(

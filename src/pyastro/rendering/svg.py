@@ -5,11 +5,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from math import cos, sin, radians, pi
-from typing import Any, Optional, get_args, get_origin
+from typing import Any, Iterable, Optional, get_args, get_origin
 
-from pyastro.util.angle import Angle, Latitude, Longitude
+from ..util.angle import Angle, Latitude, Longitude
 
 from ..astro import Chart, AspectKind, Planet, ZodiacSign
+
+logger = logging.getLogger(__name__)
 
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 _ROMAN = {
@@ -84,6 +86,8 @@ class SvgTheme:
     # Параметры подписей знаков зодиака
     sign_font_size: int = 16
     sign_color: str = "#444"
+    # обводка для некоторых символов планет в некоторых шрифтах
+    planet_symbol_outlines: dict[str, float] = None  # {"VENUS": 1.5, "MARS": 1.5}
 
     # Масштаб шрифта для дополнительной информации (например, градусы домов)
     extra_info_scale: float = 0.66
@@ -168,6 +172,8 @@ class SvgTheme:
             }
         if self.manual_shifts is None:
             self.manual_shifts = {}
+        if self.planet_symbol_outlines is None:
+            self.planet_symbol_outlines = {}
 
     @staticmethod
     def aspect_colors_from_dict(data: dict) -> dict[AspectKind, str]:
@@ -244,7 +250,33 @@ class SvgTheme:
                     # проверить, что тип совпадает (или совместим) с типом поля
                     try:
                         # value = spec.type(value)  # попытка преобразования
-                        value = _coerce_type(spec.type, value, field)
+                        logger.debug("Coerce field '%s' of type %s to type %s", field, type(value), spec.type)
+                        if spec.type == int or spec.type == 'int':
+                            value = int(value)
+                        elif spec.type == float or spec.type == 'float':
+                            value = float(value)
+                        elif spec.type == bool or spec.type == 'bool':
+                            if isinstance(value, bool):
+                                pass
+                            elif isinstance(value, str):
+                                value = value.lower() in ("1", "true", "yes", "on")
+                            else:
+                                value = bool(value)
+                        elif spec.type == list or spec.type == 'list' or (isinstance(spec.type, str) and spec.type.startswith("list[")):
+                            if not isinstance(value, (list, tuple, Iterable)):
+                                raise ValueError(f"Field '{field}' must be an iterable")
+                            value = list(value)
+                        elif spec.type == dict or spec.type == 'dict' or (isinstance(spec.type, str) and spec.type.startswith("dict[")):
+                            if not isinstance(value, dict):
+                                raise ValueError(f"Field '{field}' must be a dictionary")
+                            value = dict(value)
+                        elif spec.type == tuple or spec.type == 'tuple' or (isinstance(spec.type, str) and spec.type.startswith("tuple[")):
+                            if not isinstance(value, (list, tuple, Iterable)):
+                                raise ValueError(f"Field '{field}' must be an iterable")
+                            value = tuple(value)
+                        else:
+                            logger.warning("No coercion rule for field '%s' of type %s, using as is", field, spec.type)
+                            
                     except (TypeError, ValueError) as e:
                         raise ValueError(
                             f"Invalid type for field '{field}': expected {spec.type}, got {type(value)}({value}): {e}"
@@ -254,7 +286,9 @@ class SvgTheme:
 
 
 def _coerce_type(t: Any, val: Any, field_name: str):
+    logger.debug(f"_coerce_type: type {repr(t)}, type of type specifier: {type(t)}")
     origin = get_origin(t)
+    logger.debug("Coerce type: %s, origin: %s, value: %s (%s)", t, origin, val, type(val))
     if origin is None:
         # Простой тип
         if isinstance(t, type):
@@ -266,7 +300,15 @@ def _coerce_type(t: Any, val: Any, field_name: str):
                 raise ValueError(
                     f"Invalid value for '{field_name}': cannot cast {val!r} to {t}"
                 ) from e
-        # Аннотация без origin (например |) — просто вернуть как есть
+        elif isinstance(t, str):
+            if (t == "list" or t.startswith("list[")) and isinstance(val, (Iterable)):
+                return list(val)
+            elif (t == "tuple" or t.startswith("tuple[")) and isinstance(val, (Iterable)):
+                return tuple(val)
+            raise ValueError(f"Field '{field_name}' must be a list or tuple")
+        else:
+            # Аннотация без origin (например |) — просто вернуть как есть
+            raise TypeError(f"Cannot coerce field '{t}' is not a type")
         return val
     # Обработка generic
     if origin in (list, tuple):
@@ -508,8 +550,8 @@ def chart_to_svg(
       font-size: {theme.planet_font_size}px;
       fill: "{theme.planet_color}";
     }}
-    .venus  {{ stroke:{theme.planet_color}; stroke-width:1.5px; }}
-    .mars  {{ stroke:{theme.planet_color}; stroke-width:1.5px; }}
+    .venus  {{ stroke:{theme.planet_color}; stroke-width: {theme.planet_symbol_outlines.get("VENUS", 1.5)}; }}
+    .mars  {{ stroke:{theme.planet_color}; stroke-width: {theme.planet_symbol_outlines.get("MARS", 1.5)}; }}
     .sun {{ font-size: {theme.planet_font_size*1.24}px; }}
   </style>"""
     )

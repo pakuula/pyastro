@@ -73,7 +73,7 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
         aspect_data = [
             f"{aspect.planet1.symbol}",
             f"{aspect.planet2.symbol}",
-            f"{aspect.kind.name}",
+            f"{aspect.kind.short_name}",
             f"{Angle(aspect.angle)}",
             f"{Angle(aspect.orb)}",
         ]

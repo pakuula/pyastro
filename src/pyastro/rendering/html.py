@@ -159,7 +159,7 @@ def to_html(
         writeln("        <tr>")
         writeln(f"            <td>{aspect.planet1.symbol}</td>")
         writeln(f"            <td>{aspect.planet2.symbol}</td>")
-        writeln(f"            <td>{aspect.kind.name}</td>")
+        writeln(f"            <td>{aspect.kind.short_name}</td>")
         writeln(f"            <td>{Angle(aspect.angle)}</td>")
         writeln(f"            <td>{Angle(aspect.orb)}</td>")
         writeln("        </tr>")

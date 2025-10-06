@@ -435,11 +435,11 @@ class DatetimeLocation:
 class AspectKind(Enum):
     """Типы аспектов."""
 
-    CONJUNCTION = (0, "☌")  # Соединение (0°)
-    SEXTILE = (60, "⚹")  # Секстиль (60°)
-    SQUARE = (90, "□")  # Квадрат (90°)
-    TRINE = (120, "△")  # Трин (120°)
-    OPPOSITION = (180, "☍")  # Оппозиция (180°)
+    CONJUNCTION = (0, "☌", "CON")  # Соединение (0°)
+    SEXTILE = (60, "⚹", "SEX")  # Секстиль (60°)
+    SQUARE = (90, "□", "SQR")  # Квадрат (90°)
+    TRINE = (120, "△", "TRN")  # Трин (120°)
+    OPPOSITION = (180, "☍", "OPP")  # Оппозиция (180°)
 
     @property
     def angle(self) -> float:
@@ -450,6 +450,11 @@ class AspectKind(Enum):
     def symbol(self) -> str:
         """Возвращает символ аспекта."""
         return self.value[1]
+    
+    @property
+    def short_name(self) -> str:
+        """Возвращает короткое имя аспекта."""
+        return self.value[2]
 
 
 DEFAULT_ORB = 6.0  # стандартная орбисность для аспектов в градусах
