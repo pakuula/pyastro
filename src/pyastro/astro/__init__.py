@@ -25,7 +25,7 @@ class GeoPosition:
     place: str = ""  # название места
 
     @staticmethod
-    def from_json(data: dict) -> Self:
+    def from_dict(data: dict) -> Self:
         """Создает GeoPosition из JSON-объекта."""
         if "latitude" not in data or "longitude" not in data:
             raise ValueError("GeoPosition requires 'latitude' and 'longitude' fields")

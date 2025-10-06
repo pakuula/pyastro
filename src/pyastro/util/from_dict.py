@@ -4,7 +4,7 @@ from typing import Any, Callable, get_args, get_origin
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
-def from_json_dataclass[T](
+def from_dict_dataclass[T](
     clazz: type[T],
     data: dict,
     special_fields: dict[str, Callable[[str, any], Any]] = None,

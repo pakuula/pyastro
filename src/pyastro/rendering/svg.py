@@ -44,7 +44,7 @@ class Shift:
     dangle: float = 0.0  # угловое смещение (в градусах)
 
     @staticmethod
-    def from_json(data: dict) -> Shift:
+    def from_dict(data: dict) -> Shift:
         """Создает Shift из JSON-объекта {"dr": float, "dangle": float}."""
         if not isinstance(data, dict):
             raise ValueError("Shift data must be an object")
@@ -170,7 +170,7 @@ class SvgTheme:
             self.manual_shifts = {}
 
     @staticmethod
-    def aspect_colors_from_json(data: dict) -> dict[AspectKind, str]:
+    def aspect_colors_from_dict(data: dict) -> dict[AspectKind, str]:
         """Создает словарь цветов аспектов из JSON-объекта {"CONJUNCTION": color, ...}."""
         if not isinstance(data, dict):
             raise ValueError("Aspect colors data must be an object")
@@ -184,7 +184,7 @@ class SvgTheme:
         return result
 
     @staticmethod
-    def manual_shifts_from_json(data: dict) -> dict[str, Shift]:
+    def manual_shifts_from_dict(data: dict) -> dict[str, Shift]:
         """Создает словарь ручных смещений планет из JSON-объекта {"PLANET": {"dr": float, "dangle": float}, ...}."""
         if not isinstance(data, dict):
             raise ValueError("Manual shifts data must be an object")
@@ -196,7 +196,7 @@ class SvgTheme:
                 )
                 continue
             try:
-                result[k.upper()] = Shift.from_json(v)
+                result[k.upper()] = Shift.from_dict(v)
             except ValueError as e:
                 logging.error(
                     "Invalid shift data for planet '%s' - %s: %s - skipping", k, v, e
@@ -204,7 +204,7 @@ class SvgTheme:
         return result
 
     @staticmethod
-    def from_json(data: dict) -> SvgTheme:
+    def from_dict(data: dict) -> SvgTheme:
         """Создает тему из JSON-объекта."""
         theme = SvgTheme()
         for field, spec in theme.__dataclass_fields__.items():  # pylint: disable=E1101
@@ -231,7 +231,7 @@ class SvgTheme:
                             logging.debug(
                                 "Parsing manual shift for planet '%s': %s", k, v
                             )
-                            new_dict[k.upper()] = Shift.from_json(v)
+                            new_dict[k.upper()] = Shift.from_dict(v)
                         except ValueError as e:
                             logging.error(
                                 "Invalid shift data for planet '%s' - %s: %s - skipping",
@@ -496,18 +496,6 @@ def chart_to_svg(
     )
     ap(
         f"""<style>
-    @font-face {{
-        font-family: 'FreeSerif';
-        src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerif.ttf") format("truetype");
-        font-weight: normal;
-        font-style: normal;
-    }}
-    @font-face {{
-        font-family: 'FreeSerif';
-        src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerifBold.ttf") format("truetype");
-        font-weight: bold;
-        font-style: normal;
-    }}
     text.zodiac {{
       font-family: "Noto Sans Symbol", serif;
       font-weight: bold;
@@ -786,7 +774,7 @@ def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None
     ap(
         f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">"""
     )
-    ap('<style> text.text { font-family: "FreeSerif", serif; } </style>')
+    ap('<style> text.text { font-family: serif; } </style>')
 
     ap(f'<svg x="200" y="0">{round_chart}</svg>')
     ap('<svg x="0" y="0">')

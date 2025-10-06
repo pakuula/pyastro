@@ -5,6 +5,8 @@ from datetime import datetime, timedelta, timezone
 import json
 import logging
 import os.path
+import shutil
+import subprocess
 from tempfile import NamedTemporaryFile
 from typing import Optional, Self
 from zoneinfo import ZoneInfo
@@ -144,21 +146,37 @@ def process_data(
             f.write(html_doc)
         logger.info("HTML сохранён в %s", output_params.html_path)
     if output_params.png_path:
-        try:
-            import cairosvg  # type: ignore
-        except ImportError as e:  # pragma: no cover
-            logging.error("Не установлен cairosvg, пропуск PNG: %s", e)
+        rsvg_convert = shutil.which("rsvg-convert")
+        if rsvg_convert is None:
+            logger.error("Команда 'rsvg-convert' не найдена в PATH, пропуск PNG")
         else:
-            try:
-                cairosvg.svg2png(
-                    bytestring=svg_doc.encode("utf-8"),
-                    write_to=output_params.png_path,
-                    output_width=2400,
-                    output_height=1600,
+            cmd = [
+                rsvg_convert,
+                # "-w",
+                # "2400",
+                # "-h",
+                # "1600",
+                "-f", "png",
+                "-o",
+                output_params.png_path,
+                "-",
+            ]
+            logger.debug("Running command: %s", " ".join(cmd))
+            subproc = subprocess.run(
+                cmd,
+                input=svg_doc,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if subproc.returncode != 0:
+                logger.error(
+                    "Ошибка генерации PNG с помощью rsvg-convert: %s",
+                    subproc.stderr.strip(),
                 )
+            else:
                 logger.info("PNG сохранён в %s", output_params.png_path)
-            except (ValueError, OSError) as e:  # pragma: no cover
-                logging.error("Ошибка конвертации PNG: %s", e)
+        
     if output_params.pdf_path:
         with NamedTemporaryFile(
             delete=True, suffix=".svg"
@@ -294,7 +312,7 @@ class Datetime:
     time_zone: str  # e.g. Europe/Moscow or -08:00
 
     @staticmethod
-    def from_json(data: dict) -> Self:
+    def from_dict(data: dict) -> Self:
         date = data.get("date")
         time = data.get("time")
         time_zone = data.get("time_zone")
@@ -316,10 +334,10 @@ class Event:
     svg_theme: Optional[svg.SvgTheme] = None
     
     @staticmethod
-    def from_json(data: dict) -> Self:
-        dt = Datetime.from_json(data["datetime"])
-        loc = GeoPosition.from_json(data["location"])
-        theme = svg.SvgTheme.from_json(data["svg_theme"]) if "svg_theme" in data else svg.SvgTheme()
+    def from_dict(data: dict) -> Self:
+        dt = Datetime.from_dict(data["datetime"])
+        loc = GeoPosition.from_dict(data["location"])
+        theme = svg.SvgTheme.from_dict(data["svg_theme"]) if "svg_theme" in data else svg.SvgTheme()
         return Event(datetime=dt, location=loc, svg_theme=theme)
     
     def dt_loc(self) -> DatetimeLocation:
@@ -331,12 +349,12 @@ class JsonInput:
     event: Event
     
     @staticmethod
-    def from_json(data: dict) -> Self:
+    def from_dict(data: dict) -> Self:
         if "name" not in data or not isinstance(data["name"], str):
             raise ValueError("JsonInput must have a string 'name' field")
         if "event" not in data or not isinstance(data["event"], dict):
             raise ValueError("JsonInput must have an 'event' field of type object")
-        event = Event.from_json(data["event"])
+        event = Event.from_dict(data["event"])
         return JsonInput(name=data["name"], event=event)
     
 
@@ -466,7 +484,7 @@ def main():
         except (ValueError, OSError) as e:
             print(f"Ошибка чтения JSON файла {json_file}: {e}")
             return
-        input_value : JsonInput = JsonInput.from_json(json_data)
+        input_value : JsonInput = JsonInput.from_dict(json_data)
         name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
         # name, dt_loc, extra = parse_json_input(json_data)
         output_name = (
@@ -475,13 +493,7 @@ def main():
             else os.path.basename(json_file).rsplit(".", 1)[0]
         )
         logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
-        # if "svg_theme" in extra:
-        #     logging.debug("Разбор темы SVG из JSON")
-        #     try:
-        #         svg_theme = svg.SvgTheme.from_json(extra["svg_theme"])
-        #     except ValueError as e:
-        #         print(f"Ошибка разбора темы SVG из JSON: {e}")
-        #         return
+        
     else:
         name = args.name
         try:
