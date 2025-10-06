@@ -63,6 +63,9 @@ class SvgTheme:
     background: str = "#ffffff"
     circle_stroke: str = "#222"
     circle_stroke_width: float = 2.0
+    
+    houses_outer_stroke: str = "#000000"
+    houses_outer_stroke_width: float = 0.0
     # монохромные цвета для зодиака если не задано zodiac_fill
     zodiac_ring_fill: str = "#fafafa"
     zodiac_alt_fill: str = "#f0f0f0"
@@ -133,8 +136,12 @@ class SvgTheme:
     planet_base_point_fill: str = "#cccccc"
     planet_base_point_stroke: str = "#000000"
     planet_base_point_stroke_width: float = 0.6
-    # Коэффициент радиуса внешнего кольца зодиака относительно внешнего радиуса домов
-    zodiac_outer_ratio: float = 0.86
+
+    # Радиусы колец относительно максимального радиуса, равного половине высоты/ширины диаграммы
+    house_outer_ratio: float = 1.0 # Внешний радиус домов
+    zodiac_outer_ratio: float = 0.86 # Коэффициент радиуса внешнего кольца зодиака
+    zodiac_inner_ratio: float = 0.75  # внутренний радиус зодиака относительно внешнего радиуса домов
+    planet_inner_ratio: float = 0.60  # радиус планет относительно внешнего радиуса домов
 
     # Параметры подписей домов
     house_num_font_size: int = 14
@@ -470,10 +477,12 @@ def chart_to_svg(
     # направление дуг при рисовании от меньшего угла к большему (0 - против часовой, 1 - по часовой)
     sweep_flag = 1 if theme.clockwise else 0
 
-    houses_r_outer = min(w, h) / 2 - theme.margin
-    zodiac_r_outer = houses_r_outer * theme.zodiac_outer_ratio
-    zodiac_r_inner = zodiac_r_outer * 0.82
-    planet_r = zodiac_r_inner * 0.80
+    # Радиусы колец
+    max_r = min(w, h) / 2 - theme.margin
+    houses_r_outer = max_r * theme.house_outer_ratio
+    zodiac_r_outer = max_r * theme.zodiac_outer_ratio
+    zodiac_r_inner = max_r * theme.zodiac_inner_ratio
+    planet_r = max_r * theme.planet_inner_ratio
 
     planet_positions = chart.planet_positions
     planet_xy_base: dict[Planet, tuple[float, float]] = {
@@ -486,26 +495,34 @@ def chart_to_svg(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
     )
     ap(
-        """<style>
-    @font-face {
+        f"""<style>
+    @font-face {{
         font-family: 'FreeSerif';
         src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerif.ttf") format("truetype");
         font-weight: normal;
         font-style: normal;
-    }
-    @font-face {
+    }}
+    @font-face {{
         font-family: 'FreeSerif';
         src: url("https://raw.githubusercontent.com/pakuula/pyastro/main/fonts/FreeSerifBold.ttf") format("truetype");
         font-weight: bold;
         font-style: normal;
-    }
-    text.zodiac {
+    }}
+    text.zodiac {{
       font-family: "Noto Sans Symbol", serif;
       font-weight: bold;
-      font-size="{theme.sign_font_size}" 
-      fill="{theme.sign_color}"
-      fill: black;
-    }
+      font-size: {theme.sign_font_size}px;
+      fill: "{theme.sign_color}";
+    }}
+    text.planet {{
+      font-family: "Noto Sans Symbol", serif;
+      font-weight: bold;
+      font-size: {theme.planet_font_size}px;
+      fill: "{theme.planet_color}";
+    }}
+    .venus  {{ stroke:{theme.planet_color}; stroke-width:1.5px; }}
+    .mars  {{ stroke:{theme.planet_color}; stroke-width:1.5px; }}
+    .sun {{ font-size: {theme.planet_font_size*1.24}px; }}
   </style>"""
     )
     ap(f'<rect x="0" y="0" width="{w}" height="{h}" fill="{theme.background}" />')
@@ -544,7 +561,7 @@ def chart_to_svg(
 
     # Houses outer circle and segmented cusps
     ap(
-        f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="{theme.circle_stroke_width}" />'
+        f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.houses_outer_stroke}" stroke-width="{theme.houses_outer_stroke_width}" />'
     )
     for house in chart.houses:
         # ang = (house.cusp_longitude + rot) % 360
@@ -735,10 +752,10 @@ def chart_to_svg(
             ">"
             f"{deg_sub}</tspan>"
         )
-        planet_symbol = f"{pp.planet.symbol}{extra}"
+        planet_symbol = f"<tspan class='{pp.planet.name.lower()}'>{pp.planet.symbol}</tspan>{extra}"
 
         ap(
-            f'<text class="zodiac" x="{sx:.2f}" y="{sy:.2f}" '
+            f'<text class="planet" x="{sx:.2f}" y="{sy:.2f}" '
             f'font-size="{theme.planet_font_size}" fill="{theme.planet_color}" '
             f'text-anchor="middle" dominant-baseline="middle">{planet_symbol}</text>'
         )
