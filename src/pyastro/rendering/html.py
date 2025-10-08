@@ -9,7 +9,13 @@ from pyastro.util import Angle, Latitude, Longitude
 def to_html(
     chart: Chart, svg_chart: Optional[str] = None, svg_path: Optional[str] = None
 ) -> str:
-    """Генерация HTML отчёта по гороскопу"""
+    """Генерация HTML отчёта по гороскопу.
+    
+    :param chart: Объект Chart с данными гороскопа
+    :param svg_chart: SVG диаграмма в виде строки (если None, будет загружена из svg_path или сгенерирована)
+    :param svg_path: Путь к SVG файлу (если svg_chart не задан, будет загружен из этого файла)
+    :return: HTML документ в виде строки
+    """
     out = []
 
     def writeln(*lines: str):
