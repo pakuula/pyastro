@@ -49,9 +49,9 @@ def parse_json_datetime(dt_json: dict) -> datetime:
         raise ValueError("JSON datetime должен содержать поле 'date'")
     if not "time" in dt_json:
         raise ValueError("JSON datetime должен содержать поле 'time'")
-    if not "time_zone" in dt_json:
+    if not "time_zone" in dt_json and not "tz" in dt_json and not "timezone" in dt_json:
         raise ValueError("JSON datetime должен содержать поле 'tz'")
-    return datetime_from_input(dt_json["date"], dt_json["time"], dt_json["time_zone"])
+    return datetime_from_input(dt_json["date"], dt_json["time"], dt_json.get("time_zone", dt_json.get("tz", dt_json.get("timezone"))))
 
 def datetime_from_input(date_input: str|date, time_str: str, tz_str: str) -> datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
@@ -109,7 +109,6 @@ def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> G
     else:
         raise ValueError(f"Неверный тип долготы: {type(lon_str)}")
 
-    print(f"DEBUG: Parsed location: lat={latitude}, lon={longitude}, place={place}")
     return GeoPosition(latitude=latitude, longitude=longitude, place=place if place else "")
 
 
@@ -245,6 +244,7 @@ def main():
         "-z",
         "--time-zone",
         type=str,
+        dest="timezone",
         required=False,
         help="Часовой пояс в формате Europe/Moscow или смещение от гринвича в формате -08:00",
     )
@@ -316,7 +316,7 @@ def main():
         print("Ошибка: нужно указать имя человека (-n) или входной файл (-i)")
         return
     if args.name:
-        if not args.location or not args.date or not args.time or not args.time_zone:
+        if not args.location or not args.date or not args.time or not args.timezone:
             print(
                 "Ошибка: при указании имени (-n) нужно также указать местоположение (-l), дату (-d), время (-t) и часовой пояс (-z)"
             )
@@ -358,7 +358,7 @@ def main():
             return
         try:
             location = location_from_str(lat_str, lon_str)
-            dt = datetime_from_input(args.date, args.time, args.time_zone)
+            dt = datetime_from_input(args.date, args.time, args.timezone)
         except ValueError as e:
             print(f"Ошибка: {e}")
             return
