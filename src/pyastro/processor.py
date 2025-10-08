@@ -1,14 +1,10 @@
 from dataclasses import dataclass
 import logging
 import os.path
-import shutil
-import subprocess
 from tempfile import NamedTemporaryFile
 from typing import Optional
 
-
-
-from .rendering import svg, markdown, html, pdf
+from .rendering import svg, markdown, html, pdf, png
 
 from .astro import Chart, DatetimeLocation, HouseSystem
 from .util import Angle
@@ -146,7 +142,7 @@ def process_data(
         
     if output_params.png_path:
         try:
-            export_as_png(svg_doc, output_params.png_path, throw_if_error=True)
+            png.export_as_png(svg_doc, output_params.png_path, throw_if_error=True)
             logger.info("PNG сохранён в %s", output_params.png_path)
         except ValueError as e:
             logger.error("Ошибка генерации PNG: %s", e)
@@ -168,36 +164,4 @@ def process_data(
             pdf.export_as_pdf(tmp_md_file.name, output_params.pdf_path)
         # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
         logger.info("PDF сохранён в %s", output_params.pdf_path)
-
-def export_as_png(svg_doc, png_path, throw_if_error=False):
-    rsvg_convert = shutil.which("rsvg-convert")
-    if rsvg_convert is None:
-        if not throw_if_error:
-            logger.error("Команда 'rsvg-convert' не найдена в PATH, пропуск PNG")
-        else:
-            raise ValueError("Команда 'rsvg-convert' не найдена в PATH")
-    else:
-        cmd = [
-                rsvg_convert,
-                "-f", "png",
-                "-o",
-                png_path,
-                "-",
-            ]
-        logger.debug("Running command: %s", " ".join(cmd))
-        proc = subprocess.run(
-                cmd,
-                input=svg_doc,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-        if proc.returncode != 0:
-            if throw_if_error:
-                raise ValueError(f"Ошибка генерации PNG с помощью rsvg-convert: {proc.stderr.strip()}")
-            else:
-                logger.error(
-                        "Ошибка генерации PNG с помощью rsvg-convert: %s",
-                        proc.stderr.strip(),
-                    )
         

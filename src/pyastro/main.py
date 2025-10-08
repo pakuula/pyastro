@@ -328,34 +328,25 @@ def main():
             json_file = args.input_file
             try:
                 with open(json_file, "r", encoding="utf-8") as f:
-                    json_data = json.load(f)
+                    file_data = json.load(f)
             except (ValueError, OSError) as e:
                 print(f"Ошибка чтения JSON файла {json_file}: {e}")
                 return
-            input_value : JsonInput = JsonInput.from_dict(json_data)
-            name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
-            # name, dt_loc, extra = parse_json_input(json_data)
-            output_name = (
-                args.output_name
-                if args.output_name
-                else os.path.basename(json_file).rsplit(".", 1)[0]
-            )
-            logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
         elif ext in ("yaml", "yml"):
-            print("YAML входные файлы пока не поддерживаются")
             with open(args.input_file, "r", encoding="utf-8") as f:
-                yaml_data = yaml.safe_load(f)
-            input_value : JsonInput = JsonInput.from_dict(yaml_data)
-            name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
-            output_name = (
+                file_data = yaml.safe_load(f)
+        else:
+            print(f"Неизвестный формат входного файла: {ext}")
+            exit(1)
+
+        input_value : JsonInput = JsonInput.from_dict(file_data)
+        name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
+        logger.debug("Разобран файл параметров: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
+        output_name = (
                 args.output_name
                 if args.output_name
                 else os.path.basename(args.input_file).rsplit(".", 1)[0]
             )
-            logger.debug("Разобран YAML: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
-        else:
-            print(f"Неизвестный формат входного файла: {ext}")
-            exit(1)
     else:
         name = args.name
         try:
