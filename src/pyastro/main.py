@@ -127,7 +127,7 @@ class Datetime:
     def from_dict(data: dict) -> Self:
         date_val = data.get("date")
         time_val = data.get("time")
-        time_zone = data.get("time_zone")
+        time_zone = data.get("time_zone", data.get("tz", data.get("timezone")))
         if not isinstance(date_val, (str, datetime, date)):
             # YAML парсит вход вида 2025-30-09 как datetime.date
             raise ValueError(f"Datetime 'date' must be a string, got {type(date_val)}: {date_val}")
@@ -265,10 +265,13 @@ def main():
     )
     output_group.add_argument(
         "-o",
-        "--output",
+        "--output-name",
         type=str,
         default="",
         help="Имя для файлов вывода (без расширения), по умолчанию используется параметр -n",
+    )
+    output_group.add_argument(
+        "-D", "--output-dir", type=str, default=os.getcwd(), help="Каталог для файлов вывода",
     )
     output_group.add_argument(
         "--png", action="store_true", help="Генерировать PNG (по умолчанию False)"
@@ -333,8 +336,8 @@ def main():
             name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
             # name, dt_loc, extra = parse_json_input(json_data)
             output_name = (
-                args.output
-                if args.output
+                args.output_name
+                if args.output_name
                 else os.path.basename(json_file).rsplit(".", 1)[0]
             )
             logger.debug("Разобран JSON: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
@@ -345,8 +348,8 @@ def main():
             input_value : JsonInput = JsonInput.from_dict(yaml_data)
             name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
             output_name = (
-                args.output
-                if args.output
+                args.output_name
+                if args.output_name
                 else os.path.basename(args.input_file).rsplit(".", 1)[0]
             )
             logger.debug("Разобран YAML: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
@@ -370,8 +373,13 @@ def main():
             return
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)
-        output_name = args.output if args.output else args.name
-
+        output_name = args.output_name if args.output_name else args.name
+    
+    output_dir = os.path.abspath(args.output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    output_name = os.path.join(output_dir, output_name)
+    logger.debug("Используется имя для вывода: %s", output_name)
+    
     output_params = OutputParams(
         png_path=f"{output_name}.png" if args.png else None,
         svg_chart_path=f"{output_name}_chart.svg" if args.svg_chart else None,

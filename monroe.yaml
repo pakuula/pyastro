@@ -1,0 +1,11 @@
+name: Marilyn Monroe
+event:
+  kind: Birthday
+  datetime:
+    date: 1926-06-01
+    time: 09:30:00
+    tz: "-8:00"
+  location:
+    place: Los Angeles, CA, USA
+    latitude: 34 03 00 N
+    longitude: 118 15 00 W
