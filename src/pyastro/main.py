@@ -31,10 +31,12 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
         raise ValueError("JSON поле 'event' должно быть объектом")
     if not "datetime" in event_data:
         raise ValueError("JSON должен содержать поле 'datetime'")
-    dt = parse_json_datetime(event_data["datetime"])
-    if not "location" in event_data:
-        raise ValueError("JSON должен содержать поле 'location'")
-    loc = parse_json_location(event_data["location"])
+    # dt = parse_json_datetime(event_data["datetime"])
+    # if not "location" in event_data:
+    #     raise ValueError("JSON должен содержать поле 'location'")
+    # loc = parse_json_location(event_data["location"])
+    dt = Datetime.from_dict(event_data["datetime"])
+    loc = GeoPosition.from_dict(event_data["location"])
     extra = {k: v for k, v in json_data.items() if k not in ("name", "event")}
     extra.update({k: v for k, v in event_data.items() if k not in ("datetime", "location")})
     return name, DatetimeLocation(datetime=dt, location=loc), extra

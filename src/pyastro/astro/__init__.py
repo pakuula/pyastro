@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo
 import swisseph as swe
 
 from pyastro.util.angle import parse_lat, parse_lon
+from pyastro.util.parse_time import datetime_from_dict
 
 swe.set_ephe_path(
     os.path.dirname(__file__)
@@ -136,83 +137,7 @@ class GeoPosition:
 # #define SE_WHITE_MOON  		56
 # #define SE_PROSERPINA  		57
 # #define SE_WALDEMATH  		58
-class Planet(Enum):
-    """Идентификаторы планет, используются в Swiss Ephemeris."""
 
-    SUN = (0, "☉")
-    MOON = (1, "☽")
-    MERCURY = (2, "☿")
-    VENUS = (3, "♀")
-    MARS = (4, "♂")
-    JUPITER = (5, "♃")
-    SATURN = (6, "♄")
-    URANUS = (7, "♅")
-    NEPTUNE = (8, "♆")
-    PLUTO = (9, "⯓") # ♇ символ ⯓ не поддерживается большинством шрифтов
-    NORTH_NODE = (10, "☊")
-    SOUTH_NODE = (10, "☋")
-    # CHIRON = (15, "⚷")
-    # PHOLUS = (16, "⯛")  # символ U+2BDB
-    # CERES = (17, "⚳")  # символ U+26B3
-    # PALLAS = (18, "⚴") # символ U+26B4
-    # JUNO = (19, "⚵") # символ U+26B5
-    # VESTA = (20, "⚶") # символ U+26B6
-    # CUPIDO = (40, "⯠")  # символ U+2BE0
-    # HADES = (41, "⯡") # символ U+2BE1
-    # ZEUS = (42, "⯢") # символ U+2BE2
-    # KRONOS = (43, "⯣") # символ U+2BE3
-    # APOLLON = (44, "⯤") # символ U+2BE4
-    # ADMETOS = (45, "⯥") # символ U+2BE5
-    # VULKANUS = (46, "⯦") # символ U+2BE6
-    # POSEIDON = (47, "⯧") # символ U+2BE7
-    # ISIS = (48, "Is")
-    # NIBIRU = (49, "Nb")
-    # HARRINGTON = (50, "Hr")
-    # NEPTUNE_LEVERRIER = (51, "♆L")
-    # NEPTUNE_ADAMS = (52, "♆A")
-    # PLUTO_LOWELL = (53, "♇L")
-    # PLUTO_PICKERING = (54, "♇P")
-    # VULCAN = (55, "√")
-    # WHITE_MOON = (56, "⯝") # White Moon Lilith (U+2B5D)
-    # PROSERPINA = (57, "⯘") # Proserpina (U+2BD8)
-    # WALDEMATH = (58, "⚸") # Black Moon Lilith
-
-    @property
-    def code(self) -> int:
-        """Возвращает идентификатор планеты, используемый в Swiss Ephemeris."""
-        return self.value[0]
-
-    @property
-    def symbol(self) -> str:
-        """Возвращает символ планеты в юникоде."""
-        return self.value[1]
-
-    def __lt__(self, other):
-        if isinstance(other, Planet):
-            return self.code < other.code
-        return NotImplemented
-    
-    def is_south_node(self) -> bool:
-        """Возвращает True, если планета - Южный узел."""
-        return self == Planet.SOUTH_NODE
-
-class HouseSystem(Enum):
-    """Идентификаторы систем домов, используются в Swiss Ephemeris."""
-
-    PLACIDUS = b"P"
-    KOCH = b"K"
-    PORPHYRIUS = b"O"
-    REGIOMONTANUS = b"R"
-    CAMPANUS = b"C"
-    EQUAL = b"A"
-    EQUAL_2 = b"E"
-    VEHLOW_EQUAL = b"V"
-    WHOLE_SIGN = b"W"
-    MERIDIAN = b"X"
-    AZIMUTHAL = b"H"
-    POLICH_PAGE = b"T"
-    ALCABITUS = b"B"
-    MORINUS = b"M"
 
 
 class ZodiacSign(Enum):
@@ -262,6 +187,130 @@ class ZodiacSign(Enum):
         """Возвращает символ знака зодиака в юникоде."""
         return self.value[1]
 
+class EssentialDignity(Enum):
+    Domicile = 0
+    Exaltation = 1
+    Detriment = 2
+    Fall = 3
+
+
+@dataclass
+class PlanetSpec:
+    """Спецификация планеты для перечисления Planet."""
+    code: int
+    symbol: str
+    domicile: list[ZodiacSign]
+    exaltation: ZodiacSign
+    detriment: list[ZodiacSign]
+    fall: ZodiacSign
+#     Солнце (Sun)	Лев (Leo)	Овен (Aries)	Водолей (Aquarius)	Весы (Libra)
+# Луна (Moon)	Рак (Cancer)	Телец (Taurus)	Козерог (Capricorn)	Скорпион (Scorpio)
+# Меркурий (Mercury)	Близнецы (Gemini), Дева (Virgo)	Дева (Virgo)	Стрелец (Sagittarius), Рыбы (Pisces)	Рыбы (Pisces)
+# Венера (Venus)	Телец (Taurus), Весы (Libra)	Рыбы (Pisces)	Скорпион (Scorpio), Овен (Aries)	Дева (Virgo)
+# Марс (Mars)	Овен (Aries), Скорпион (Scorpio)	Козерог (Capricorn)	Весы (Libra), Телец (Taurus)	Рак (Cancer)
+# Юпитер (Jupiter)	Стрелец (Sagittarius), Рыбы (Pisces)	Рак (Cancer)	Близнецы (Gemini), Дева (Virgo)	Козерог (Capricorn)
+# Сатурн (Saturn)	Козерог (Capricorn), Водолей (Aquarius)	Весы (Libra)	Рак (Cancer), Лев (Leo)	Овен (Aries)
+# Уран (Uranus)	Водолей (Aquarius)	Скорпион (Scorpio) (неклассич.)	Лев (Leo)	Телец (Taurus)
+# Нептун (Neptune)	Рыбы (Pisces)	Лев (Leo) (неклассич.)	Дева (Virgo)	Козерог (Capricorn)
+# Плутон (Pluto)	Скорпион (Scorpio)	Овен (Aries) (неклассич.)	Телец (Taurus)	Весы (Libra)    
+    
+class Planet(Enum):
+    """Идентификаторы планет, используются в Swiss Ephemeris."""
+
+    SUN = PlanetSpec(0, "☉", [ZodiacSign.LEO], ZodiacSign.ARIES, [ZodiacSign.AQUARIUS], ZodiacSign.LIBRA)
+    MOON = PlanetSpec(1, "☽", [ZodiacSign.CANCER], ZodiacSign.TAURUS, [ZodiacSign.CAPRICORN], ZodiacSign.SCORPIO)
+    MERCURY = PlanetSpec(2, "☿", [ZodiacSign.GEMINI, ZodiacSign.VIRGO], ZodiacSign.VIRGO, [ZodiacSign.SAGITTARIUS, ZodiacSign.PISCES], ZodiacSign.PISCES)
+    VENUS = PlanetSpec(3, "♀", [ZodiacSign.TAURUS, ZodiacSign.LIBRA], ZodiacSign.PISCES, [ZodiacSign.SCORPIO, ZodiacSign.ARIES], ZodiacSign.VIRGO)
+    MARS = PlanetSpec(4, "♂", [ZodiacSign.ARIES, ZodiacSign.SCORPIO], ZodiacSign.CAPRICORN, [ZodiacSign.LIBRA, ZodiacSign.TAURUS], ZodiacSign.CANCER)
+    JUPITER = PlanetSpec(5, "♃", [ZodiacSign.SAGITTARIUS, ZodiacSign.PISCES], ZodiacSign.CANCER, [ZodiacSign.GEMINI, ZodiacSign.VIRGO], ZodiacSign.CAPRICORN)
+    SATURN = PlanetSpec(6, "♄", [ZodiacSign.CAPRICORN, ZodiacSign.AQUARIUS], ZodiacSign.LIBRA, [ZodiacSign.CANCER, ZodiacSign.LEO], ZodiacSign.ARIES)
+    URANUS = PlanetSpec(7, "♅", [ZodiacSign.AQUARIUS], ZodiacSign.SCORPIO, [ZodiacSign.LEO], ZodiacSign.TAURUS)
+    NEPTUNE = PlanetSpec(8, "♆", [ZodiacSign.PISCES], ZodiacSign.LEO, [ZodiacSign.VIRGO], ZodiacSign.CAPRICORN)
+    PLUTO = PlanetSpec(9, "⯓", [ZodiacSign.SCORPIO], ZodiacSign.ARIES, [ZodiacSign.TAURUS], ZodiacSign.LIBRA)
+    NORTH_NODE = PlanetSpec(10, "☊", [], None, [], None)
+    SOUTH_NODE = PlanetSpec(10, "☋", [], None, [], None)
+    # CHIRON = (15, "⚷")
+    # PHOLUS = (16, "⯛")  # символ U+2BDB
+    # CERES = (17, "⚳")  # символ U+26B3
+    # PALLAS = (18, "⚴") # символ U+26B4
+    # JUNO = (19, "⚵") # символ U+26B5
+    # VESTA = (20, "⚶") # символ U+26B6
+    # CUPIDO = (40, "⯠")  # символ U+2BE0
+    # HADES = (41, "⯡") # символ U+2BE1
+    # ZEUS = (42, "⯢") # символ U+2BE2
+    # KRONOS = (43, "⯣") # символ U+2BE3
+    # APOLLON = (44, "⯤") # символ U+2BE4
+    # ADMETOS = (45, "⯥") # символ U+2BE5
+    # VULKANUS = (46, "⯦") # символ U+2BE6
+    # POSEIDON = (47, "⯧") # символ U+2BE7
+    # ISIS = (48, "Is")
+    # NIBIRU = (49, "Nb")
+    # HARRINGTON = (50, "Hr")
+    # NEPTUNE_LEVERRIER = (51, "♆L")
+    # NEPTUNE_ADAMS = (52, "♆A")
+    # PLUTO_LOWELL = (53, "♇L")
+    # PLUTO_PICKERING = (54, "♇P")
+    # VULCAN = (55, "√")
+    # WHITE_MOON = (56, "⯝") # White Moon Lilith (U+2B5D)
+    # PROSERPINA = (57, "⯘") # Proserpina (U+2BD8)
+    # WALDEMATH = (58, "⚸") # Black Moon Lilith
+
+    @property
+    def code(self) -> int:
+        """Возвращает идентификатор планеты, используемый в Swiss Ephemeris."""
+        return self.value.code
+
+    @property
+    def symbol(self) -> str:
+        """Возвращает символ планеты в юникоде."""
+        return self.value.symbol
+    
+    @property
+    def domicile(self) -> list[ZodiacSign]:
+        """Возвращает знак(и) зодиака, в которых планета находится в обители."""
+        return self.value.domicile
+    
+    @property
+    def exaltation(self) -> ZodiacSign:
+        """Возвращает знак зодиака, в котором планета находится в экзальтации."""
+        return self.value.exaltation
+    
+    @property
+    def detriment(self) -> list[ZodiacSign]:
+        """Возвращает знак(и) зодиака, в которых планета находится в падении."""
+        return self.value.detriment
+    
+    @property
+    def fall(self) -> ZodiacSign:
+        """Возвращает знак зодиака, в котором планета находится в падении."""
+        return self.value.fall
+
+    def __lt__(self, other):
+        if isinstance(other, Planet):
+            return self.code < other.code
+        return NotImplemented
+    
+    def is_south_node(self) -> bool:
+        """Возвращает True, если планета - Южный узел."""
+        return self == Planet.SOUTH_NODE
+
+class HouseSystem(Enum):
+    """Идентификаторы систем домов, используются в Swiss Ephemeris."""
+
+    PLACIDUS = b"P"
+    KOCH = b"K"
+    PORPHYRIUS = b"O"
+    REGIOMONTANUS = b"R"
+    CAMPANUS = b"C"
+    EQUAL = b"A"
+    EQUAL_2 = b"E"
+    VEHLOW_EQUAL = b"V"
+    WHOLE_SIGN = b"W"
+    MERIDIAN = b"X"
+    AZIMUTHAL = b"H"
+    POLICH_PAGE = b"T"
+    ALCABITUS = b"B"
+    MORINUS = b"M"
 
 @dataclass
 class PlanetPosition:
@@ -315,7 +364,38 @@ class PlanetPosition:
     def is_retrograde(self) -> bool:
         """Возвращает True, если планета ретроградна."""
         return self.longitude_speed < 0
+    
+    
+    @property
+    def is_domicile(self) -> bool:
+        """Возвращает True, если планета в обители."""
+        return self.zodiac_sign in self.planet.domicile
+    
+    @property
+    def is_exaltation(self) -> bool:
+        """Возвращает True, если планета в экзальтации."""
+        return self.zodiac_sign == self.planet.exaltation
+    
+    @property
+    def is_detriment(self) -> bool:
+        """Возвращает True, если планета в падении."""
+        return self.zodiac_sign in self.planet.detriment
+    
+    @property
+    def is_fall(self) -> bool:
+        """Возвращает True, если планета в падении."""
+        return self.zodiac_sign == self.planet.fall
 
+    def match(self, dignity: EssentialDignity) -> bool:
+        match dignity:
+            case EssentialDignity.Domicile:
+                return self.is_domicile
+            case EssentialDignity.Exaltation:
+                return self.is_exaltation
+            case EssentialDignity.Detriment:
+                return self.is_detriment
+            case EssentialDignity.Fall:
+                return self.is_fall
 
 @dataclass
 class HousePosition:
@@ -430,6 +510,16 @@ class DatetimeLocation:
             house_cusps.append(HousePosition.from_swe_data(i + 1, cusps[i], next_cusp))
 
         return house_cusps
+
+    @staticmethod
+    def from_dict(data: dict) -> Self:
+        if not "datetime" in data:
+            raise ValueError("JSON должен содержать поле 'datetime'")
+        dt = datetime_from_dict(data["datetime"])
+        if not "location" in data:
+            raise ValueError("JSON должен содержать поле 'location'")
+        loc = GeoPosition.from_dict(data["location"])
+        return DatetimeLocation(datetime=dt, location=loc)
 
 
 class AspectKind(Enum):

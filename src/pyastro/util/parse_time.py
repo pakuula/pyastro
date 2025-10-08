@@ -1,6 +1,7 @@
 
 import datetime
 import zoneinfo
+import time as time_module
 
 _strptime = datetime.datetime.strptime
 
@@ -59,3 +60,40 @@ def parse_timezone(tz_str: str) -> zoneinfo.ZoneInfo:
     except Exception as e:
         raise ValueError(f"Неверный часовой пояс: {tz_str}: {e}") from e
     return tzinfo
+
+def datetime_from_dict(data: dict) -> datetime:
+    """Разбор JSON datetime в объект datetime"""
+    date_str = data.get("date")
+    time_str = data.get("time")
+    tz_str = data.get("time_zone", data.get("timezone", data.get("tz", None)))  # поддержка всех вариантов
+    if date_str is None:
+        raise ValueError("Объект datetime должен содержать поле 'date'")
+    if time_str is None:
+        raise ValueError("Объект datetime должен содержать поле 'time'")
+    if tz_str is None:
+        raise ValueError("Объект datetime должен содержать поле 'time_zone', 'timezone' или 'tz'")
+    return _datetime_from_input(data["date"], data["time"], data["time_zone"])
+
+def _datetime_from_input(date_input: str|datetime.date, time_str: str, tz_str: str) -> datetime:
+    """Разбор строки даты, времени и часового пояса в объект datetime"""
+    try:
+        if isinstance(date_input, str):
+            date = datetime.fromisoformat(date_input).date()
+        else:
+            date = date_input
+    except ValueError as e:
+        raise ValueError(f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}") from e
+    if isinstance(time_str, str):
+        time = parse_time_string(time_str)
+    elif isinstance(time_str, (datetime.time, time_module.time)): # на самом деле это один и тот же тип
+        time = time_str
+    elif isinstance(time_str, datetime.datetime):
+        time = time_str.time()
+    elif isinstance(time_str, time_module.time):
+        time = time_str
+    else:
+        raise ValueError(f"Неверный формат времени: {time_str} (type {type(time_str)})")
+    
+    tzinfo = parse_timezone(tz_str)
+    return datetime.datetime.combine(date, time, tzinfo=tzinfo)
+
