@@ -10,6 +10,7 @@ from .astro import Chart, DatetimeLocation, HouseSystem
 from .util import Angle
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
 # Helper to convert integer to Unicode subscript digits (0-29)
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
@@ -59,17 +60,18 @@ def print_chart_info(chart: Chart):
             f"Ретроградность={'Да' if planet_pos.is_retrograde() else 'Нет'}"
         )
 
-    print("\nКуспиды домов (Placidus):")
-    for house_cusp in chart.dt_loc.get_house_cusps(HouseSystem.PLACIDUS):
-        deg_sub = int_to_subscript(round(house_cusp.angle_in_sign))
-        roman = to_roman(house_cusp.house_number)
-        print(
-            f"Дом {roman}{deg_sub}:"
-            f" Куспид={Angle(house_cusp.cusp_longitude)}, "
-            f"Длина={Angle(house_cusp.length)}, "
-            f"Знак={house_cusp.zodiac_sign.symbol}, "
-            f"Угол={Angle(house_cusp.angle_in_sign)}"
-        )
+    if not chart.no_houses:
+        print("\nКуспиды домов (Placidus):")
+        for house_cusp in chart.dt_loc.get_house_cusps(HouseSystem.PLACIDUS):
+            deg_sub = int_to_subscript(round(house_cusp.angle_in_sign))
+            roman = to_roman(house_cusp.house_number)
+            print(
+                f"Дом {roman}{deg_sub}:"
+                f" Куспид={Angle(house_cusp.cusp_longitude)}, "
+                f"Длина={Angle(house_cusp.length)}, "
+                f"Знак={house_cusp.zodiac_sign.symbol}, "
+                f"Угол={Angle(house_cusp.angle_in_sign)}"
+            )
 
     print("\nАспекты между планетами:")
     for aspect in chart.aspects:
@@ -99,6 +101,8 @@ def process_data(
     svg_theme: Optional[svg.SvgTheme] = None,
 ):
     """Генерация астрологической карты и вывод отчётов в разные форматы."""
+    logger.info("Генерация астрологической карты для %s", person_name)
+    logger.debug("DatetimeLocation: %s", dt_loc)
     chart = Chart(person_name, dt_loc)
 
     if output_params.print_flag:
@@ -110,7 +114,7 @@ def process_data(
         chart,
         svg_theme,
         # Асцендент на востоке
-        angle=-chart.ascendant,
+        angle=-chart.ascendant if chart.ascendant is not None else 0,
     )
     svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
     

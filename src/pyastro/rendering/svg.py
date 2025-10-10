@@ -595,51 +595,52 @@ def chart_to_svg(
         )
 
     # Houses outer circle and segmented cusps
-    ap('<!-- Houses -->')
-    ap(
-        f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.houses_outer_stroke}" stroke-width="{theme.houses_outer_stroke_width}" />'
-    )
-    for house in chart.houses:
-        # ang = (house.cusp_longitude + rot) % 360
-        ang = (house.cusp_longitude) % 360
-        xpi, ypi = polar(ang, planet_r)
-        xzi, yzi = polar(ang, zodiac_r_inner)
+    if chart.houses:
+        ap('<!-- Houses -->')
         ap(
-            f'<line x1="{xpi:.2f}" y1="{ypi:.2f}" x2="{xzi:.2f}" y2="{yzi:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+            f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.houses_outer_stroke}" stroke-width="{theme.houses_outer_stroke_width}" />'
         )
-        xzo, yzo = polar(ang, zodiac_r_outer)
-        xho, yho = polar(ang, houses_r_outer)
-        ap(
-            f'<line x1="{xzo:.2f}" y1="{yzo:.2f}" x2="{xho:.2f}" y2="{yho:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
-        )
-        # реальный угол в знаке без учёта поворота (оставляем физическое значение 0..29)
-        deg_sub = round(house.cusp_longitude % 30)
-        label = (
-            f"{to_roman(house.house_number)}"
-            # показатель угла куспида дома в знаке
-            f"<tspan font-size='{theme.house_num_font_size * theme.extra_info_scale:.0f}' "
-            f"baseline-shift='{theme.house_angle_baseline_shift}' "
-            ">"
-            f"{deg_sub}"
-            "</tspan>"
-        )
-        base_r_label = (houses_r_outer + zodiac_r_outer) / 2
-        # лёгкий угловой сдвиг (CCW)
-        label_angle = ang + theme.house_label_angle_offset_deg
-        ntx, nty = polar(label_angle, base_r_label)
-        # касательное смещение вдоль направления увеличения угла (единичный тангенциальный вектор)
-        a_rad = radians(ang)
-        tx = -sin(a_rad) * theme.house_label_tangent_offset_px
-        ty = -cos(a_rad) * theme.house_label_tangent_offset_px
-        ntx += tx
-        nty += ty
-        ap(
-            f"<text x='{ntx:.2f}' y='{nty:.2f}' "
-            f"font-size='{theme.house_num_font_size}' fill='{theme.house_num_color}' font-weight='bold' "
-            f"text-anchor='middle' dominant-baseline='middle'>"
-            f"{label}"
-            "</text>"
-        )
+        for house in chart.houses:
+            # ang = (house.cusp_longitude + rot) % 360
+            ang = (house.cusp_longitude) % 360
+            xpi, ypi = polar(ang, planet_r)
+            xzi, yzi = polar(ang, zodiac_r_inner)
+            ap(
+                f'<line x1="{xpi:.2f}" y1="{ypi:.2f}" x2="{xzi:.2f}" y2="{yzi:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+            )
+            xzo, yzo = polar(ang, zodiac_r_outer)
+            xho, yho = polar(ang, houses_r_outer)
+            ap(
+                f'<line x1="{xzo:.2f}" y1="{yzo:.2f}" x2="{xho:.2f}" y2="{yho:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+            )
+            # реальный угол в знаке без учёта поворота (оставляем физическое значение 0..29)
+            deg_sub = round(house.cusp_longitude % 30)
+            label = (
+                f"{to_roman(house.house_number)}"
+                # показатель угла куспида дома в знаке
+                f"<tspan font-size='{theme.house_num_font_size * theme.extra_info_scale:.0f}' "
+                f"baseline-shift='{theme.house_angle_baseline_shift}' "
+                ">"
+                f"{deg_sub}"
+                "</tspan>"
+            )
+            base_r_label = (houses_r_outer + zodiac_r_outer) / 2
+            # лёгкий угловой сдвиг (CCW)
+            label_angle = ang + theme.house_label_angle_offset_deg
+            ntx, nty = polar(label_angle, base_r_label)
+            # касательное смещение вдоль направления увеличения угла (единичный тангенциальный вектор)
+            a_rad = radians(ang)
+            tx = -sin(a_rad) * theme.house_label_tangent_offset_px
+            ty = -cos(a_rad) * theme.house_label_tangent_offset_px
+            ntx += tx
+            nty += ty
+            ap(
+                f"<text x='{ntx:.2f}' y='{nty:.2f}' "
+                f"font-size='{theme.house_num_font_size}' fill='{theme.house_num_color}' font-weight='bold' "
+                f"text-anchor='middle' dominant-baseline='middle'>"
+                f"{label}"
+                "</text>"
+            )
 
     # Structural circles
     ap('<!-- Horoscope rings -->')
@@ -647,7 +648,16 @@ def chart_to_svg(
         ap(
             f'<circle cx="{cx}" cy="{cy}" r="{r:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="{theme.circle_stroke_width}" stroke-opacity="0.9" />'
         )
-
+    if chart.no_houses:
+        # нарисовать линии зодиакальных секторов от planet_r до zodiac_r_outer
+        for i in range(12):
+            # ang = (i * 30 + rot) % 360
+            ang = (i * 30) % 360
+            x1, y1 = polar(ang, planet_r)
+            x2, y2 = polar(ang, zodiac_r_outer)
+            ap(
+                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+            )
     # Sign boundary ticks on planet_r (inward)
     tick_r_inner = max(planet_r - theme.tick_length, 0)
     for k in range(12):

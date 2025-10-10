@@ -96,7 +96,8 @@ def to_html(
     writeln("            <th>Знак</th>")
     writeln("            <th>Угол в знаке</th>")
     writeln("            <th>Ретроградность</th>")
-    writeln("            <th>Дом</th>")
+    if not chart.no_houses:
+        writeln("            <th>Дом</th>")
     writeln("        </tr>")
     writeln("    </thead>")
     writeln("    <tbody>")
@@ -109,43 +110,45 @@ def to_html(
         writeln(f"            <td>{planet_pos.zodiac_sign.symbol}</td>")
         writeln(f"            <td>{Angle(planet_pos.angle_in_sign())}</td>")
         writeln(f'            <td>{"Да" if planet_pos.is_retrograde() else "Нет"}</td>')
-        writeln(
-            f"            <td>{chart.planet_houses[planet_pos.planet].roman_number}</td>"
-        )
+        if not chart.no_houses:
+            writeln(
+                f"            <td>{chart.planet_houses[planet_pos.planet].roman_number}</td>"
+            )
         writeln("        </tr>")
 
     writeln("    </tbody>")
     writeln("</table>")
 
     # Houses table
-    writeln("<h2>Дома по системе Плацидус</h2>")
-    writeln("<table>")
-    writeln("    <thead>")
-    writeln("        <tr>")
-    writeln("            <th>Дом</th>")
-    writeln("            <th>Куспид</th>")
-    writeln("            <th>Длина</th>")
-    writeln("            <th>Знак</th>")
-    writeln("            <th>Угол в знаке</th>")
-    writeln("            <th>Планеты</th>")
-    writeln("        </tr>")
-    writeln("    </thead>")
-    writeln("    <tbody>")
-
-    for house in chart.houses:
+    if not chart.no_houses:
+        writeln("<h2>Дома по системе Плацидус</h2>")
+        writeln("<table>")
+        writeln("    <thead>")
         writeln("        <tr>")
-        writeln(f"            <td>{house.roman_number}</td>")
-        writeln(f"            <td>{Angle.Lon(house.cusp_longitude)}</td>")
-        writeln(f"            <td>{Angle(house.length)}</td>")
-        writeln(f"            <td>{house.zodiac_sign.symbol}</td>")
-        writeln(f"            <td>{Angle(house.angle_in_sign)}</td>")
-        planets_in_house = chart.house_planets.get(house.house_number, [])
-        planet_symbols = " ".join([p.symbol for p in planets_in_house])
-        writeln(f"            <td>{planet_symbols}</td>")
+        writeln("            <th>Дом</th>")
+        writeln("            <th>Куспид</th>")
+        writeln("            <th>Длина</th>")
+        writeln("            <th>Знак</th>")
+        writeln("            <th>Угол в знаке</th>")
+        writeln("            <th>Планеты</th>")
         writeln("        </tr>")
-
-    writeln("    </tbody>")
-    writeln("</table>")
+        writeln("    </thead>")
+        writeln("    <tbody>")
+    
+        for house in chart.houses:
+            writeln("        <tr>")
+            writeln(f"            <td>{house.roman_number}</td>")
+            writeln(f"            <td>{Angle.Lon(house.cusp_longitude)}</td>")
+            writeln(f"            <td>{Angle(house.length)}</td>")
+            writeln(f"            <td>{house.zodiac_sign.symbol}</td>")
+            writeln(f"            <td>{Angle(house.angle_in_sign)}</td>")
+            planets_in_house = chart.house_planets.get(house.house_number, [])
+            planet_symbols = " ".join([p.symbol for p in planets_in_house])
+            writeln(f"            <td>{planet_symbols}</td>")
+            writeln("        </tr>")
+    
+        writeln("    </tbody>")
+        writeln("</table>")
 
     # Aspects table
     writeln("<h2>Аспекты</h2>")

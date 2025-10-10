@@ -1,11 +1,12 @@
 #! /usr/bin/env python3
 import argparse
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, time
 import json
 import logging
 import os.path
 from typing import Optional, Self
+from zoneinfo import ZoneInfo
 
 import yaml
 
@@ -53,19 +54,23 @@ def parse_json_datetime(dt_json: dict) -> datetime:
         raise ValueError("JSON datetime должен содержать поле 'tz'")
     return datetime_from_input(dt_json["date"], dt_json["time"], dt_json.get("time_zone", dt_json.get("tz", dt_json.get("timezone"))))
 
-def datetime_from_input(date_input: str|date, time_str: str, tz_str: str) -> datetime:
+def datetime_from_input(date_input: str|date, time_str: str, tz_str: str, date_only: bool = False) -> datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
     try:
         if isinstance(date_input, str):
-            date = datetime.fromisoformat(date_input).date()
+            date_val = datetime.fromisoformat(date_input).date()
         else:
-            date = date_input
+            date_val = date_input
     except ValueError as e:
         raise ValueError(f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}") from e
     
-    time = parse_time_string(time_str)
-    tzinfo = parse_timezone(tz_str)
-    return datetime.combine(date, time, tzinfo=tzinfo)
+    if date_only and (not time_str) and (not tz_str):
+        # если указана только дата, без времени и часового пояса, возвращаем дату с полуднем и UTC
+        return datetime.combine(date_val, time(12, 0), tzinfo=ZoneInfo("UTC"))
+    else:
+        time_val = parse_time_string(time_str)
+        tzinfo_val = parse_timezone(tz_str)
+        return datetime.combine(date_val, time_val, tzinfo=tzinfo_val)
 
 
 def parse_json_location(loc_json: dict) -> GeoPosition:
@@ -121,23 +126,31 @@ class Datetime:
     date: str  # YYYY-MM-DD
     time: str  # HH:MM:SS
     time_zone: str  # e.g. Europe/Moscow or -08:00
+    date_only: bool = False
 
     @staticmethod
     def from_dict(data: dict) -> Self:
         date_val = data.get("date")
         time_val = data.get("time")
         time_zone = data.get("time_zone", data.get("tz", data.get("timezone")))
+        date_only = data.get("date_only", data.get("date-only", False))
         if not isinstance(date_val, (str, datetime, date)):
             # YAML парсит вход вида 2025-30-09 как datetime.date
             raise ValueError(f"Datetime 'date' must be a string, got {type(date_val)}: {date_val}")
-        if not isinstance(time_val, str):
+        if not date_only and time_val is None:
+            raise ValueError("Datetime 'time' must be provided when 'date_only' is False")
+        if not date_only and time_zone is None:
+            raise ValueError("Datetime 'time_zone' must be provided when 'date_only' is False")
+
+        if time_val is not None and not isinstance(time_val, str):
             raise ValueError(f"Datetime 'time' must be a string, got {type(time_val)}: {time_val}")
-        if not isinstance(time_zone, str):
+        if time_zone is not None and not isinstance(time_zone, str):
             raise ValueError(f"Datetime 'time_zone' must be a string, got {type(time_zone)}: {time_zone}")
-        return Datetime(date=date_val, time=time_val, time_zone=time_zone)
+        logger.debug("Parsed Datetime from dict: date=%s, time=%s, time_zone=%s, date_only=%s", date_val, time_val, time_zone, date_only)
+        return Datetime(date=date_val, time=time_val, time_zone=time_zone, date_only=date_only)
 
     def value(self) -> datetime:
-        return datetime_from_input(self.date, self.time, self.time_zone)
+        return datetime_from_input(self.date, self.time, self.time_zone, date_only=self.date_only)
     
 @dataclass
 class Event:
@@ -153,7 +166,7 @@ class Event:
         return Event(datetime=dt, location=loc, svg_theme=theme)
     
     def dt_loc(self) -> DatetimeLocation:
-        return DatetimeLocation(datetime=self.datetime.value(), location=self.location)
+        return DatetimeLocation(datetime=self.datetime.value(), location=self.location, date_only=self.datetime.date_only)
     
 @dataclass
 class JsonInput:
@@ -215,7 +228,7 @@ def main():
     """
     _init_logging()
     parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
-
+    
     direct_args = parser.add_argument_group(
         "Параметры натальной карты",
         "Задание параметров натальной карты в командной строке",
@@ -247,6 +260,10 @@ def main():
         dest="timezone",
         required=False,
         help="Часовой пояс в формате Europe/Moscow или смещение от гринвича в формате -08:00",
+    )
+    
+    direct_args.add_argument(
+        "--date-only", action="store_true", help="Использовать только дату (время приблизительное)"
     )
 
     file_args = parser.add_argument_group(
@@ -316,11 +333,20 @@ def main():
         print("Ошибка: нужно указать имя человека (-n) или входной файл (-i)")
         return
     if args.name:
-        if not args.location or not args.date or not args.time or not args.timezone:
+        required = [args.location, args.date]
+        if not all(required):
             print(
-                "Ошибка: при указании имени (-n) нужно также указать местоположение (-l), дату (-d), время (-t) и часовой пояс (-z)"
+                "Ошибка: при указании имени (-n) нужно также указать местоположение (-l) и дату (-d)"
             )
             return
+        if not args.date_only:
+            required = (args.time, args.timezone)
+            if not all(required):
+                print(
+                    "Ошибка: при указании имени (-n) нужно также указать время (-t) и часовой пояс (-z), если не используется --date-only"
+                )
+                return
+        
 
     if args.input_file:
         ext = os.path.basename(args.input_file).rsplit(".", 1)[-1].lower()
@@ -358,9 +384,16 @@ def main():
             return
         try:
             location = location_from_str(lat_str, lon_str)
-            dt = datetime_from_input(args.date, args.time, args.timezone)
         except ValueError as e:
             print(f"Ошибка: {e}")
+            return
+        try:
+            if args.date_only and (not args.time) and (not args.timezone):
+                dt = datetime_from_input(args.date, "12:00", "UTC")
+            else:
+                dt = datetime_from_input(args.date, args.time, args.timezone)
+        except ValueError as e:
+            print(f"Ошибка задания времени: {e}")
             return
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)

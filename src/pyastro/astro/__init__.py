@@ -465,10 +465,13 @@ class HousePosition:
 
 @dataclass
 class DatetimeLocation:
-    """Дата, время и географическое положение."""
+    """Дата, время и географическое положение.
+
+    Дополнительно можно указать, что метка времени приблизительна, и непригодна для вычисления домов."""
 
     datetime: datetime
     location: GeoPosition
+    date_only: bool = False  # если True, время приблизительное, используется только дата
 
     def to_julian_day(self) -> float:
         """Преобразует дату и время в юлианскую дату."""
@@ -499,6 +502,8 @@ class DatetimeLocation:
         self, house_system: HouseSystem = HouseSystem.PLACIDUS
     ) -> list[HousePosition]:
         """Возвращает позиции куспидов домов."""
+        if self.date_only:
+            raise ValueError("Невозможно вычислить дома, если date_only=True")
         jd = self.to_julian_day()
         lat = self.location.latitude
         lon = self.location.longitude
@@ -519,7 +524,16 @@ class DatetimeLocation:
         if not "location" in data:
             raise ValueError("JSON должен содержать поле 'location'")
         loc = GeoPosition.from_dict(data["location"])
-        return DatetimeLocation(datetime=dt, location=loc)
+        if "date_only" in data:
+            if not isinstance(data["date_only"], bool):
+                raise ValueError(
+                    f"Invalid type for 'date_only': expected bool, got {type(data['date_only'])}"
+                )
+            date_only = data["date_only"]
+        else:
+            date_only = False
+
+        return DatetimeLocation(datetime=dt, location=loc, date_only=date_only)
 
 
 class AspectKind(Enum):
@@ -694,15 +708,26 @@ class Chart:
         self.house_system = house_system
 
         self.planet_positions: list[PlanetPosition] = self.dt_loc.get_all_planet_positions()
-        self.houses: list[HousePosition] = self.dt_loc.get_house_cusps(self.house_system)
-        self.ascendant: float = self.houses[0].cusp_longitude
-        self.descendant: float = (self.ascendant + 180) % 360
-        self.midheaven: float = self.houses[9].cusp_longitude
-        self.imum_coeli: float = self.houses[3].cusp_longitude
         self.aspects: AspectList = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
 
-        self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(self.planet_positions, self.houses)
-        self.house_planets: dict[int, list[Planet]] = get_house_planets(self.planet_positions, self.houses)
+        if dt_loc.date_only:
+            self.houses = []
+            self.ascendant = None
+            self.descendant = None
+            self.midheaven = None
+            self.imum_coeli = None
+            self.planet_houses = {}
+            self.house_planets = {}
+            self.no_houses = True
+        else:
+            self.houses: list[HousePosition] = self.dt_loc.get_house_cusps(self.house_system)
+            self.ascendant: float = self.houses[0].cusp_longitude
+            self.descendant: float = (self.ascendant + 180) % 360
+            self.midheaven: float = self.houses[9].cusp_longitude
+            self.imum_coeli: float = self.houses[3].cusp_longitude
+            self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(self.planet_positions, self.houses)
+            self.house_planets: dict[int, list[Planet]] = get_house_planets(self.planet_positions, self.houses)
+            self.no_houses = False
 
     @property
     def datetime(self) -> datetime:
