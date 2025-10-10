@@ -51,8 +51,9 @@ def parse_timezone(tz_str: str) -> zoneinfo.ZoneInfo:
     try:
         if tz_str.startswith(("+", "-")):
             hours_offset, minutes_offset = map(int, tz_str.split(":"))
+            sign = 1 if hours_offset >= 0 else -1
             tzinfo = datetime.timezone(
-                offset=datetime.timedelta(hours=hours_offset, minutes=minutes_offset),
+                offset=datetime.timedelta(hours=hours_offset, minutes=sign*minutes_offset),
                 name=f"GMT{'+' if hours_offset > 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
             )
         else:
@@ -74,22 +75,18 @@ def datetime_from_dict(data: dict) -> datetime:
         raise ValueError("Объект datetime должен содержать поле 'time_zone', 'timezone' или 'tz'")
     return _datetime_from_input(data["date"], data["time"], data["time_zone"])
 
-def _datetime_from_input(date_input: str|datetime.date, time_str: str, tz_str: str) -> datetime:
+def _datetime_from_input(date_input: str|datetime.date, time_str: str, tz_str: str) -> datetime.datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
     try:
         if isinstance(date_input, str):
-            date = datetime.fromisoformat(date_input).date()
+            date = datetime.datetime.fromisoformat(date_input).date()
         else:
             date = date_input
     except ValueError as e:
         raise ValueError(f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}") from e
     if isinstance(time_str, str):
         time = parse_time_string(time_str)
-    elif isinstance(time_str, (datetime.time, time_module.time)): # на самом деле это один и тот же тип
-        time = time_str
-    elif isinstance(time_str, datetime.datetime):
-        time = time_str.time()
-    elif isinstance(time_str, time_module.time):
+    elif isinstance(time_str, datetime.time): # тот же тип, что и time_module.time
         time = time_str
     else:
         raise ValueError(f"Неверный формат времени: {time_str} (type {type(time_str)})")
