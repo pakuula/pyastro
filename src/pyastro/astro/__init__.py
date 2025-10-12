@@ -738,3 +738,10 @@ class Chart:
     def location(self) -> GeoPosition:
         """Возвращает географическое положение карты."""
         return self.dt_loc.location
+    
+    def planet_position(self, planet: Planet) -> PlanetPosition | None:
+        """Возвращает позицию планеты в карте или None, если планета не найдена."""
+        for pos in self.planet_positions:
+            if pos.planet == planet:
+                return pos
+        return None
