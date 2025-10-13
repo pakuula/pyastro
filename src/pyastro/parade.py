@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
+"""
+Скрипт для нахождения парадов планет. Он перебирает даты и выводит те, когда как минимум <n> планет (n - параметр)
+находятся в пределах сектора размером 20-30 градусов.
+Можно указать дату начала и дату конца, а также широту и долготу места наблюдения.
+
+Пример запуска:
+
+```
+python -m pyastro.parade --start 2023-01-01 --end 2025-12-31 --min-planets 5 --lat 55.75 --lon 37.62 --angle 30
+```
+"""
 import argparse
 from dataclasses import dataclass
 import datetime
 from enum import Enum
+from typing import Generator
 
-from pyastro.astro import Chart, DatetimeLocation, Planet, GeoPosition
-
-# Скрипт для вычисления парада планет. Он перебирает даты и выводит те, когда как минимум <n> планет (n - параметр)
-# находятся в пределах сектора размером 20-30 градусов.
-# Можно указать дату начала и дату конца, а также широту и долготу места наблюдения.
-# Пример запуска:
-# python -m pyastro.scripts.planet_parade --start 2023-01-01 --end 2025-12-31 --min-planets 5 --lat 55.75 --lon 37.62
+from pyastro.astro import DatetimeLocation, Planet, GeoPosition
 
 planet_list = [
     Planet.SUN,
@@ -27,6 +33,16 @@ planet_list = [
 
 
 def main():
+    """Главная функция для запуска скрипта из командной строки.
+    
+    Параметры командной строки:
+    - -s, --start: Дата начала (YYYY-MM-DD).
+    - -e, --end: Дата конца (YYYY-MM-DD).
+    - -p, --min-planets: Минимальное количество планет в одном секторе эклиптики.
+    - -a, --angle: Угол сектора (по умолчанию 30 градусов).
+    - --lat: Широта места наблюдения (по умолчанию 55.755814, Москва).
+    - --lon: Долгота места наблюдения (по умолчанию 37.617707, Москва).
+    """
     parser = argparse.ArgumentParser(description="Нахождение парадов планет.")
     parser.add_argument(
         "-s", "--start", type=str, required=True, help="Дата начала (YYYY-MM-DD)."
@@ -39,7 +55,7 @@ def main():
         "--min-planets",
         type=int,
         required=True,
-        help="Минимальное количество планет.",
+        help="Минимальное количество планет в одном секторе эклиптики.",
     )
     parser.add_argument(
         "-a",
@@ -93,13 +109,34 @@ def main():
 
 
 class Sector(Enum):
+    """Идентифицирует тип сектора: вперед по эклиптике от планеты, назад по эклиптике от планеты, или нет парада."""
     FORWARD = 1
     BACKWARD = -1
     NONE = 0
 
+@dataclass
+class ParadeEvent:
+    """Событие парада планет в конкретную дату."""
+    planets: tuple[Planet]
+    date: datetime.date
+
+@dataclass
+class ParadeRange:
+    """Диапазон дат, когда происходил парад заданных планет."""
+    planets: tuple[Planet]
+    start_date: datetime.date
+    end_date: datetime.date = None
+    
+    def __post_init__(self):
+        if self.end_date is None:
+            self.end_date = self.start_date
+
+    def is_next_day(self, date: datetime.date) -> bool:
+        return self.end_date + datetime.timedelta(days=1) == date
 
 @dataclass
 class PlanetSector:
+    """Содержит информацию о планетах в секторах перед и за планетой по эклиптике."""
     planet: Planet
     center: float
     size: float = 30.0
@@ -113,12 +150,14 @@ class PlanetSector:
         self.back_planets = []
 
     def add_planet(self, other: Planet, angle: float):
+        """Добавляет планету в соответствующий сектор, если она туда попадает."""
         if 0 <= angle <= self.size:
             self.fwd_planets.append(other)
         elif -self.size <= angle < 0:
             self.back_planets.append(other)
 
     def has_parade(self, min_planets: int) -> Sector:
+        """Проверяет, есть ли парад в одном из секторов."""
         if self.total_fwd >= min_planets:
             return Sector.FORWARD
         elif self.total_back >= min_planets:
@@ -143,25 +182,6 @@ class PlanetSector:
         return 1 + len(self.back_planets)
 
 
-@dataclass
-class ParadeEvent:
-    planets: tuple[Planet]
-    date: datetime.date
-
-@dataclass
-class ParadeRange:
-    planets: tuple[Planet]
-    start_date: datetime.date
-    end_date: datetime.date = None
-    
-    def __post_init__(self):
-        if self.end_date is None:
-            self.end_date = self.start_date
-
-    def is_next_day(self, date: datetime.date) -> bool:
-        return self.end_date + datetime.timedelta(days=1) == date
-
-
 def find_planet_parades(
     start_date: datetime.date,
     end_date: datetime.date,
@@ -169,7 +189,17 @@ def find_planet_parades(
     angle: float,
     latitude: float,
     longitude: float,
-):
+) -> Generator[ParadeEvent, None, None]:
+    """Ищет парады планет в заданном диапазоне дат.
+    
+    :param start_date: Дата начала.
+    :param end_date: Дата конца.
+    :param min_planets: Минимальное количество планет в параде.
+    :param angle: Угол сектора, в котором должны быть не менее min_planets планет.
+    :param latitude: Широта места наблюдения.
+    :param longitude: Долгота места наблюдения.
+    :return: Генератор событий парадов планет.
+    """
     current_date = start_date
     delta = datetime.timedelta(days=1)
 
@@ -179,10 +209,11 @@ def find_planet_parades(
             location=GeoPosition(latitude=latitude, longitude=longitude),
             date_only=True,
         )
-        chart = Chart(name="Planet Parade", dt_loc=dt_loc)
         parades: set[tuple[Planet]] = set()
+        planet_position_list = dt_loc.get_all_planet_positions(planet_list)
+        planet_positions = {pos.planet: pos for pos in planet_position_list}
         for planet in planet_list:
-            planet_longitude = chart.planet_position(planet).longitude
+            planet_longitude = planet_positions[planet].longitude
             sector = PlanetSector(
                 planet=planet, center=planet_longitude, size=angle
             )
@@ -191,7 +222,7 @@ def find_planet_parades(
                     continue
                 sector.add_planet(
                     other=other_planet,
-                    angle=chart.planet_position(other_planet).longitude
+                    angle=planet_positions[other_planet].longitude
                     - planet_longitude,
                 )
             if sector.has_parade(min_planets) != Sector.NONE:
@@ -202,6 +233,7 @@ def find_planet_parades(
         current_date += delta
 
 def group_by_parade(parades: list[ParadeEvent]) -> list[ParadeRange]:
+    """Группирует события парадов по наборам планет, объединяя их в заданные диапазоны дат."""
     current_parades = {}
     parade_ranges: list[ParadeRange] = []
     for event in parades:

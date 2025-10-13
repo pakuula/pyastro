@@ -2,7 +2,7 @@ from itertools import combinations
 import os.path
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import Enum, Flag
 from typing import Any, Self
 from zoneinfo import ZoneInfo
 
@@ -461,8 +461,69 @@ class HousePosition:
     def has_planet(self, planet_position: PlanetPosition) -> bool:
         """Проверяет, находится ли планета в пределах этого дома."""
         return self.has_longitude(planet_position.longitude)
+# From swephexp.h
+# #define JPLEPH    1       /* use JPL ephemeris */
+# #define SWIEPH    2       /* use SWISSEPH ephemeris */
+# #define MOSEPH    4       /* use Moshier ephemeris */
 
+# #define HELCTR	8      /* heliocentric position */
+# #define TRUEPOS	16     /* true/geometric position, not apparent position */
+# #define J2000	32     /* no precession, i.e. give J2000 equinox */
+# #define NONUT	64     /* no nutation, i.e. mean equinox of date */
+# #define SPEED3	128    /* speed from 3 positions (do not use it,
+#                                 * SPEED is faster and more precise.) */
+# #define SPEED	256    /* high precision speed  */
+# #define NOGDEFL	512    /* turn off gravitational deflection */
+# #define NOABERR	1024   /* turn off 'annual' aberration of light */
+# #define ASTROMETRIC (NOABERR|NOGDEFL) /* astrometric position,
+#                                 * i.e. with light-time, but without aberration and
+# 			        * light deflection */
+# #define EQUATORIAL (2*1024)    /* equatorial positions are wanted */
+# #define XYZ	(4*1024)     /* cartesian, not polar, coordinates */
+# #define RADIANS	(8*1024)     /* coordinates in radians, not degrees */
+# #define BARYCTR	(16*1024)    /* barycentric position */
+# #define TOPOCTR	(32*1024)    /* topocentric position */
+# #define ORBEL_AA TOPOCTR /* used for Astronomical Almanac mode in 
+#                                       * calculation of Kepler elipses */
+# #define TROPICAL	(0)          /* tropical position (default) */
+# #define SIDEREAL	(64*1024)    /* sidereal position */
+# #define ICRS	(128*1024)   /* ICRS (DE406 reference frame) */
+# #define DPSIDEPS_1980	(256*1024) /* reproduce JPL Horizons 
+#                                       * 1962 - today to 0.002 arcsec. */
+# #define JPLHOR	DPSIDEPS_1980
+# #define JPLHOR_APPROX	(512*1024)   /* approximate JPL Horizons 1962 - today */
+# #define CENTER_BODY	(1024*1024)  /* calculate position of center of body (COB)
+#                                                 of planet, not barycenter of its system */
+# #define TEST_PLMOON	(2*1024*1024 | J2000 | ICRS | HELCTR | TRUEPOS)  /* test raw data in files sepm9* */
+class SweFlag(Flag):
+    JPLEPH =     1       #  use JPL ephemeris 
+    SWIEPH =     2       #  use SWISSEPH ephemeris 
+    MOSEPH =     4       #  use Moshier ephemeris 
 
+    HELCTR = 	8      #  heliocentric position 
+    TRUEPOS = 	16     #  true/geometric position, not apparent position 
+    J2000 = 	32     #  no precession, i.e. give J2000 equinox 
+    NONUT = 	64     #  no nutation, i.e. mean equinox of date 
+    SPEED3 = 	128    #  speed from 3 positions (do not use it, SPEED is faster and more precise.) 
+    SPEED = 	256    #  high precision speed  
+    NOGDEFL = 	512    #  turn off gravitational deflection 
+    NOABERR = 	1024   #  turn off 'annual' aberration of light 
+    ASTROMETRIC =  (NOABERR|NOGDEFL) #  astrometric position, i.e. with light-time, but without aberration and light deflection 
+    EQUATORIAL =  (2*1024)    #  equatorial positions are wanted 
+    XYZ = 	(4*1024)     #  cartesian, not polar, coordinates 
+    RADIANS = 	(8*1024)     #  coordinates in radians, not degrees 
+    BARYCTR = 	(16*1024)    #  barycentric position 
+    TOPOCTR = 	(32*1024)    #  topocentric position 
+    ORBEL_AA =  TOPOCTR #  used for Astronomical Almanac mode in calculation of Kepler elipses 
+    TROPICAL = 	(0)          #  tropical position (default) 
+    SIDEREAL = 	(64*1024)    #  sidereal position 
+    ICRS = 	(128*1024)   #  ICRS (DE406 reference frame) 
+    DPSIDEPS_1980 = 	(256*1024) #  reproduce JPL Horizons 1962 - today to 0.002 arcsec. 
+    JPLHOR =	DPSIDEPS_1980
+    JPLHOR_APPROX = 	(512*1024)   #  approximate JPL Horizons 1962 - today 
+    CENTER_BODY = 	(1024*1024)  #  calculate position of center of body (COB) of planet, not barycenter of its system 
+    TEST_PLMOON = 	(2*1024*1024 | J2000 | ICRS | HELCTR | TRUEPOS)  #  test raw data in files sepm9* 
+    
 @dataclass
 class DatetimeLocation:
     """Дата, время и географическое положение.
@@ -486,7 +547,9 @@ class DatetimeLocation:
     def get_planet_position(self, planet: Planet) -> tuple:
         """Возвращает позицию планеты в виде (долгота, широта, расстояние от Земли)."""
         jd = self.to_julian_day()
-        swe_data, _ = swe.calc_ut(jd, planet.code) # pylint: disable=c-extension-no-member
+        flag = SweFlag.SWIEPH | SweFlag.SPEED | SweFlag.TOPOCTR
+        swe.set_topo(self.location.longitude, self.location.latitude, self.location.elevation)
+        swe_data, _ = swe.calc_ut(jd, planet.code, flag.value) # pylint: disable=c-extension-no-member
 
         return PlanetPosition.from_swe_data(planet, swe_data)
 
