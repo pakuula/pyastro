@@ -1,7 +1,8 @@
 {
+    "$schema": "https://raw.githubusercontent.com/pakuula/pyastro/main/schema.json",
     "name": "Владимир Вольфович Жириновский",
     "event": {
-        "kind": "birth",
+        "kind": "natal",
         "datetime": {
             "date": "1946-04-25",
             "time": "23:00:00",

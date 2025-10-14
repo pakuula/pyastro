@@ -1,10 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/pakuula/pyastro/main/schema.json
 name: Marilyn Monroe
 event:
-  kind: Birthday
+  kind: natal
   datetime:
     date: 1926-06-01
     time: 09:30:00
-    tz: "-8:00"
+    time_zone: "-8:00"
   location:
     place: Los Angeles, CA, USA
     latitude: 34 03 00 N

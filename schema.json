@@ -1,0 +1,125 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/pakuula/pyastro/main/schema.json",
+    "title": "Personal Natal Chart Input",
+    "description": "Input data for calculating a natal chart",
+    "type": "object",
+    "properties": {
+        "event": {
+            "description": "Natal event details",
+            "type": "object",
+            "properties": {
+                "kind": {
+                    "type": "string",
+                    "default": "natal",
+                    "description": "Type of event, e.g., 'natal'"
+                },
+                "datetime": {
+                    "type": "object",
+                    "description": "Date and time of the event",
+                    "properties": {
+                        "date": {
+                            "type": "string",
+                            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+                            "description": "Date in YYYY-MM-DD format"
+                        },
+                        "time": {
+                            "type": "string",
+                            "pattern": "^\\d{2}:\\d{2}:\\d{2}$",
+                            "description": "Time in HH:MM:SS format"
+                        },
+                        "time_zone": {
+                            "type": "string",
+                            "description": "IANA time zone name, e.g., 'Europe/Moscow', or GMT offset like '+03:00'"
+                        },
+                        "date_only": {
+                            "type": "boolean",
+                            "description": "If true, only the date is known, time is assumed to be 12:00:00"
+                        }
+                    },
+                    "oneOf": [
+                        {
+                            "properties": {
+                                "date": true,
+                                "date_only": true
+                            },
+                            "additionalProperties": false
+                        },
+                        {
+                            "properties": {
+                                "date": true,
+                                "time": true,
+                                "time_zone": true
+                            },
+                            "additionalProperties": false
+                        }
+                    ]
+                },
+                "location": {
+                    "type": "object",
+                    "description": "Geographical location of the event",
+                    "properties": {
+                        "place": {
+                            "type": "string",
+                            "description": "Name of the place (city, country)"
+                        },
+                        "latitude": {
+                            "oneOf": [
+                                {
+                                    "description": "Latitude in decimal degrees, e.g. 34.05 for 34°03' N",
+                                    "type": "number",
+                                    "minimum": -90,
+                                    "maximum": 90
+                                },
+                                {
+                                    "description": "Latitude in degrees, minutes, seconds format (e.g., 34 03' N)",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+)( [0-9]+'?)( [0-9]+\"?)? [NS]$"
+                                },
+                                {
+                                    "description": "Latitude in degrees, minutes and seconds, e.g. 34°03'00\" N",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+)°([0-9]+)'([0-9]+([.][0-9]+)?)?\"? [NS]$"
+                                }
+                            ]
+                        },
+                        "longitude": {
+                            "oneOf": [
+                                {
+                                    "description": "Longitude in decimal degrees, e.g. -118.25 for 118°15' W",
+                                    "type": "number",
+                                    "minimum": -180,
+                                    "maximum": 180
+                                },
+                                {
+                                    "description": "Longitude in degrees, minutes, seconds format (e.g., 118 15' W)",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+)( [0-9]+'?)( [0-9]+\"?)? [EW]$"
+                                },
+                                {
+                                    "description": "Longitude in degrees, minutes and seconds, e.g. 118°15'00\" W",
+                                    "type": "string",
+                                    "pattern": "^([0-9]+)°([0-9]+)'([0-9]+([.][0-9]+)?)?\"? [EW]$"
+                                }
+                            ]
+                        }
+                    },
+                    "required": [
+                        "latitude",
+                        "longitude"
+                    ],
+                    "additionalProperties": false
+                }
+            },
+            "required": [
+                "kind",
+                "datetime",
+                "location"
+            ],
+            "additionalProperties": true
+        }
+    },
+    "required": [
+        "event"
+    ]
+}
