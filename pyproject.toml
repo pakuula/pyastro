@@ -19,6 +19,7 @@ dependencies = [
 [project.scripts]
 pyastro = "pyastro.main:main"
 pyastro-parade = "pyastro.parade:main"
+pyastro-validate = "pyastro.validate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
