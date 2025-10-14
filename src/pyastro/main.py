@@ -118,7 +118,7 @@ def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> G
 
 
 def _init_logging():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
     logger.setLevel(logging.INFO)
 
 @dataclass
@@ -162,7 +162,7 @@ class Event:
     def from_dict(data: dict) -> Self:
         dt = Datetime.from_dict(data["datetime"])
         loc = GeoPosition.from_dict(data["location"])
-        theme = svg.SvgTheme.from_dict(data["svg_theme"]) if "svg_theme" in data else svg.SvgTheme()
+        theme = svg.SvgTheme.from_dict(data["svg_theme"]) if "svg_theme" in data else None
         return Event(datetime=dt, location=loc, svg_theme=theme)
     
     def dt_loc(self) -> DatetimeLocation:
@@ -367,7 +367,7 @@ def main():
 
         input_value : JsonInput = JsonInput.from_dict(file_data)
         name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
-        logger.debug("Разобран файл параметров: name=%s, dt_loc=%s, extra=%s", name, dt_loc, svg_theme)
+        logger.debug("Разобран файл параметров: name=%s, dt_loc=%s, svg_theme=%s", name, dt_loc, svg_theme)
         output_name = (
                 args.output_name
                 if args.output_name

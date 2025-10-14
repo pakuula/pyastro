@@ -10,7 +10,6 @@ from .astro import Chart, DatetimeLocation, HouseSystem
 from .util import Angle
 
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
 
 # Helper to convert integer to Unicode subscript digits (0-29)
 _SUB_MAP = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
