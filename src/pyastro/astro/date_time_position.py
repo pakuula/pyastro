@@ -1,7 +1,8 @@
+"""Модуль для работы с Дата, время и географическое положение."""
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Self
+from typing import Optional, Self
 from zoneinfo import ZoneInfo
 
 from pyastro.util.parse_time import datetime_from_dict
@@ -11,6 +12,7 @@ from .planet import Planet, PlanetPosition, NEW_PLANETS_WITH_NODES
 from pyastro.util.angle import parse_lat, parse_lon
 
 import swisseph as swe
+
 
 @dataclass
 class GeoPosition:
@@ -22,8 +24,9 @@ class GeoPosition:
     place: str = ""  # название места
 
     @staticmethod
-    def from_dict(data: dict) -> Self:
+    def from_dict(data: dict) -> "GeoPosition":
         """Создает GeoPosition из JSON-объекта."""
+
         if "latitude" not in data or "longitude" not in data:
             raise ValueError("GeoPosition requires 'latitude' and 'longitude' fields")
         if isinstance(data["latitude"], (int, float)):
@@ -72,31 +75,36 @@ class GeoPosition:
 class DatetimeLocation:
     """Дата, время и географическое положение.
 
-    Дополнительно можно указать, что метка времени приблизительна, и непригодна для вычисления домов."""
+    Дополнительно можно указать, что метка времени приблизительна, и непригодна для вычисления домов.
+    """
 
     datetime: datetime
     location: GeoPosition
-    date_only: bool = False  # если True, время приблизительное, используется только дата
+    date_only: bool = (
+        False  # если True, время приблизительное, используется только дата
+    )
 
     def to_julian_day(self) -> float:
         """Преобразует дату и время в юлианскую дату."""
         utc_datetime = self.datetime.astimezone(ZoneInfo("UTC"))  # Convert to UTC
-        return swe.julday( # pylint: disable=c-extension-no-member
+        return swe.julday(  # pylint: disable=c-extension-no-member
             utc_datetime.year,
             utc_datetime.month,
             utc_datetime.day,
             utc_datetime.hour + utc_datetime.minute / 60 + utc_datetime.second / 3600,
-        ) 
+        )
 
-    def get_planet_position(self, planet: Planet) -> tuple:
+    def get_planet_position(self, planet: Planet) -> PlanetPosition:
         """Возвращает позицию планеты в виде (долгота, широта, расстояние от Земли)."""
         jd = self.to_julian_day()
-        swe_data, _ = swe.calc_ut(jd, planet.code) # pylint: disable=c-extension-no-member
+        swe_data, _ = swe.calc_ut(  # pylint: disable=c-extension-no-member
+            jd, planet.code
+        )
 
         return PlanetPosition.from_swe_data(planet, swe_data)
 
     def get_all_planet_positions(
-        self, planets: tuple[Planet] = None
+        self, planets: Optional[tuple[Planet, ...]] = None
     ) -> list[PlanetPosition]:
         """Возвращает позиции всех планет."""
         if planets is None:
@@ -112,7 +120,9 @@ class DatetimeLocation:
         jd = self.to_julian_day()
         lat = self.location.latitude
         lon = self.location.longitude
-        cusps, _ = swe.houses(jd, lat, lon, house_system.value)
+        cusps, _ = swe.houses(  # pylint: disable=c-extension-no-member
+            jd, lat, lon, house_system.value
+        )
 
         house_cusps = []
         for i in range(12):
@@ -122,7 +132,9 @@ class DatetimeLocation:
         return house_cusps
 
     @staticmethod
-    def from_dict(data: dict) -> Self:
+    def from_dict(data: dict) -> "DatetimeLocation":
+        """Создает DatetimeLocation из JSON-объекта."""
+
         if not "datetime" in data:
             raise ValueError("JSON должен содержать поле 'datetime'")
         dt = datetime_from_dict(data["datetime"])
@@ -139,4 +151,3 @@ class DatetimeLocation:
             date_only = False
 
         return DatetimeLocation(datetime=dt, location=loc, date_only=date_only)
-

@@ -1,11 +1,23 @@
 #! /usr/bin/env python3
+"""Команда для запуска астрологических расчётов и генерации графики.
+
+Параметры командной строки:
+
+`pyastro -h` показывает справку
+
+`pyastro -i INPUT_FILE` читает параметры из входного файла INPUT_FILE (json или yaml)
+
+`pyastro -n NAME -l LOCATION -d DATE [-t TIME -z TIME_ZONE | --date-only]`
+задаёт параметры напрямую в командной строке.
+"""
 import argparse
 from dataclasses import dataclass
 from datetime import date, datetime, time
 import json
 import logging
 import os.path
-from typing import Optional, Self
+import sys
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 import yaml
@@ -17,6 +29,8 @@ from .util import parse_time_string, parse_timezone
 from .processor import process_data, OutputParams
 
 logger = logging.getLogger(__name__)
+
+
 def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
 
@@ -39,7 +53,9 @@ def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
     dt = Datetime.from_dict(event_data["datetime"])
     loc = GeoPosition.from_dict(event_data["location"])
     extra = {k: v for k, v in json_data.items() if k not in ("name", "event")}
-    extra.update({k: v for k, v in event_data.items() if k not in ("datetime", "location")})
+    extra.update(
+        {k: v for k, v in event_data.items() if k not in ("datetime", "location")}
+    )
     return name, DatetimeLocation(datetime=dt, location=loc), extra
 
 
@@ -52,9 +68,16 @@ def parse_json_datetime(dt_json: dict) -> datetime:
         raise ValueError("JSON datetime должен содержать поле 'time'")
     if not "time_zone" in dt_json and not "tz" in dt_json and not "timezone" in dt_json:
         raise ValueError("JSON datetime должен содержать поле 'tz'")
-    return datetime_from_input(dt_json["date"], dt_json["time"], dt_json.get("time_zone", dt_json.get("tz", dt_json.get("timezone"))))
+    return datetime_from_input(
+        dt_json["date"],
+        dt_json["time"],
+        dt_json.get("time_zone", dt_json.get("tz", dt_json.get("timezone", ""))),
+    )
 
-def datetime_from_input(date_input: str|date, time_str: str, tz_str: str, date_only: bool = False) -> datetime:
+
+def datetime_from_input(
+    date_input: str | date, time_str: str, tz_str: str, date_only: bool = False
+) -> datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
     try:
         if isinstance(date_input, str):
@@ -62,12 +85,14 @@ def datetime_from_input(date_input: str|date, time_str: str, tz_str: str, date_o
         else:
             date_val = date_input
     except ValueError as e:
-        raise ValueError(f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}") from e
-    
+        raise ValueError(
+            f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}"
+        ) from e
+
     if date_only and (not time_str) and (not tz_str):
         # если указана только дата, без времени и часового пояса, возвращаем дату с полуднем и UTC
         return datetime.combine(date_val, time(12, 0), tzinfo=ZoneInfo("UTC"))
-    else:
+    else:  # pylint: disable=no-else-return
         time_val = parse_time_string(time_str)
         tzinfo_val = parse_timezone(tz_str)
         return datetime.combine(date_val, time_val, tzinfo=tzinfo_val)
@@ -84,7 +109,9 @@ def parse_json_location(loc_json: dict) -> GeoPosition:
     return location_from_str(loc_json["latitude"], loc_json["longitude"], place)
 
 
-def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> GeoPosition:
+def location_from_str(
+    lat_str: str, lon_str: str, place: str | None = None
+) -> GeoPosition:
     """Разбор строки широты и долготы в объект GeoPosition.
 
     Возможные форматы:
@@ -97,7 +124,7 @@ def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> G
             raise ValueError(f"Неверный формат широты: {lat_str}") from e
     elif isinstance(lat_str, (int, float)):
         latitude = float(lat_str)
-        if not (-90.0 <= latitude <= 90.0):
+        if not (-90.0 <= latitude <= 90.0):  # pylint: disable=superfluous-parens
             raise ValueError(f"Широта вне диапазона [-90, 90]: {latitude}")
     else:
         raise ValueError(f"Неверный тип широты: {type(lat_str)}")
@@ -109,80 +136,130 @@ def location_from_str(lat_str: str, lon_str: str, place: str | None = None) -> G
             raise ValueError(f"Неверный формат долготы: {lon_str}") from e
     elif isinstance(lon_str, (int, float)):
         longitude = float(lon_str)
-        if not (-180.0 <= longitude <= 180.0):
+        if not (-180.0 <= longitude <= 180.0):  # pylint: disable=superfluous-parens
             raise ValueError(f"Долгота вне диапазона [-180, 180]: {longitude}")
     else:
         raise ValueError(f"Неверный тип долготы: {type(lon_str)}")
 
-    return GeoPosition(latitude=latitude, longitude=longitude, place=place if place else "")
+    return GeoPosition(
+        latitude=latitude, longitude=longitude, place=place if place else ""
+    )
 
 
 def _init_logging():
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s"
+    )
     logger.setLevel(logging.INFO)
+
 
 @dataclass
 class Datetime:
+    """Дата и время с часовым поясом.
+
+    :param date: дата в формате YYYY-MM-DD
+    :param time: время в формате HH:MM:SS
+    :param time_zone: часовой пояс в формате IANA (например, Europe/Moscow) или смещение (-08:00)
+    :param date_only: если True, то время и часовой пояс игнорируются
+    """
+
     date: str  # YYYY-MM-DD
     time: str  # HH:MM:SS
     time_zone: str  # e.g. Europe/Moscow or -08:00
     date_only: bool = False
 
     @staticmethod
-    def from_dict(data: dict) -> Self:
+    def from_dict(data: dict) -> "Datetime":
+        """Разбор словаря (объекта json или yaml) в объект Datetime"""
         date_val = data.get("date")
         time_val = data.get("time")
         time_zone = data.get("time_zone", data.get("tz", data.get("timezone")))
         date_only = data.get("date_only", data.get("date-only", False))
         if not isinstance(date_val, (str, datetime, date)):
             # YAML парсит вход вида 2025-30-09 как datetime.date
-            raise ValueError(f"Datetime 'date' must be a string, got {type(date_val)}: {date_val}")
+            raise ValueError(
+                f"Datetime 'date' must be a string, got {type(date_val)}: {date_val}"
+            )
         if not date_only and time_val is None:
-            raise ValueError("Datetime 'time' must be provided when 'date_only' is False")
+            raise ValueError(
+                "Datetime 'time' must be provided when 'date_only' is False"
+            )
         if not date_only and time_zone is None:
-            raise ValueError("Datetime 'time_zone' must be provided when 'date_only' is False")
+            raise ValueError(
+                "Datetime 'time_zone' must be provided when 'date_only' is False"
+            )
 
         if time_val is not None and not isinstance(time_val, str):
-            raise ValueError(f"Datetime 'time' must be a string, got {type(time_val)}: {time_val}")
+            raise ValueError(
+                f"Datetime 'time' must be a string, got {type(time_val)}: {time_val}"
+            )
         if time_zone is not None and not isinstance(time_zone, str):
-            raise ValueError(f"Datetime 'time_zone' must be a string, got {type(time_zone)}: {time_zone}")
-        logger.debug("Parsed Datetime from dict: date=%s, time=%s, time_zone=%s, date_only=%s", date_val, time_val, time_zone, date_only)
-        return Datetime(date=date_val, time=time_val, time_zone=time_zone, date_only=date_only)
+            raise ValueError(
+                f"Datetime 'time_zone' must be a string, got {type(time_zone)}: {time_zone}"
+            )
+        logger.debug(
+            "Parsed Datetime from dict: date=%s, time=%s, time_zone=%s, date_only=%s",
+            date_val,
+            time_val,
+            time_zone,
+            date_only,
+        )
+        return Datetime(
+            date=date_val, time=time_val, time_zone=time_zone, date_only=date_only
+        )
 
     def value(self) -> datetime:
-        return datetime_from_input(self.date, self.time, self.time_zone, date_only=self.date_only)
-    
+        """Возвращает объект datetime, соответствующий дате и времени с учётом часового пояса."""
+        return datetime_from_input(
+            self.date, self.time, self.time_zone, date_only=self.date_only
+        )
+
+
 @dataclass
 class Event:
+    """Событие с датой, временем и местоположением."""
+
     datetime: Datetime
     location: GeoPosition
     svg_theme: Optional[svg.SvgTheme] = None
-    
+
     @staticmethod
-    def from_dict(data: dict) -> Self:
+    def from_dict(data: dict) -> "Event":
+        """Разбор словаря (объекта json или yaml) в объект Event"""
         dt = Datetime.from_dict(data["datetime"])
         loc = GeoPosition.from_dict(data["location"])
-        theme = svg.SvgTheme.from_dict(data["svg_theme"]) if "svg_theme" in data else None
+        theme = (
+            svg.SvgTheme.from_dict(data["svg_theme"]) if "svg_theme" in data else None
+        )
         return Event(datetime=dt, location=loc, svg_theme=theme)
-    
+
     def dt_loc(self) -> DatetimeLocation:
-        return DatetimeLocation(datetime=self.datetime.value(), location=self.location, date_only=self.datetime.date_only)
-    
+        """Возвращает объект DatetimeLocation, соответствующий дате, времени и местоположению события."""
+        return DatetimeLocation(
+            datetime=self.datetime.value(),
+            location=self.location,
+            date_only=self.datetime.date_only,
+        )
+
+
 @dataclass
 class JsonInput:
+    """Тип для представления входных данных в формате JSON или YAML."""
+
     name: str
     event: Event
-    
+
     @staticmethod
-    def from_dict(data: dict) -> Self:
+    def from_dict(data: dict) -> "JsonInput":
+        """Разбор словаря (объекта json или yaml) в объект JsonInput"""
         if "name" not in data or not isinstance(data["name"], str):
             raise ValueError("JsonInput must have a string 'name' field")
         if "event" not in data or not isinstance(data["event"], dict):
             raise ValueError("JsonInput must have an 'event' field of type object")
         event = Event.from_dict(data["event"])
         return JsonInput(name=data["name"], event=event)
-    
 
+# pylint: disable=too-many-locals,too-many-statements,too-many-branches,too-many-return-statements
 def main():
     """
     Главная функция для запуска астрологических расчётов и генерации графики.
@@ -228,7 +305,7 @@ def main():
     """
     _init_logging()
     parser = argparse.ArgumentParser(description="Астрологические расчёты и графика")
-    
+
     direct_args = parser.add_argument_group(
         "Параметры натальной карты",
         "Задание параметров натальной карты в командной строке",
@@ -261,9 +338,11 @@ def main():
         required=False,
         help="Часовой пояс в формате Europe/Moscow или смещение от гринвича в формате -08:00",
     )
-    
+
     direct_args.add_argument(
-        "--date-only", action="store_true", help="Использовать только дату (время приблизительное)"
+        "--date-only",
+        action="store_true",
+        help="Использовать только дату (время приблизительное)",
     )
 
     file_args = parser.add_argument_group(
@@ -288,18 +367,26 @@ def main():
         help="Имя для файлов вывода (без расширения), по умолчанию используется параметр -n",
     )
     output_group.add_argument(
-        "-D", "--output-dir", type=str, default=os.getcwd(), help="Каталог для файлов вывода",
+        "-D",
+        "--output-dir",
+        type=str,
+        default=os.getcwd(),
+        help="Каталог для файлов вывода",
     )
     output_group.add_argument(
         "--png", action="store_true", help="Генерировать PNG (по умолчанию False)"
     )
     output_group.add_argument(
-        "--svg", action="store_true", help="Генерировать SVG документ (по умолчанию False)"
+        "--svg",
+        action="store_true",
+        help="Генерировать SVG документ (по умолчанию False)",
     )
     output_group.add_argument(
-        "--svg-chart", action="store_true", help="Генерировать SVG диаграмму (по умолчанию False)"
+        "--svg-chart",
+        action="store_true",
+        help="Генерировать SVG диаграмму (по умолчанию False)",
     )
-    
+
     output_group.add_argument(
         "--text", action="store_true", help="Генерировать Markdown (по умолчанию False)"
     )
@@ -346,7 +433,6 @@ def main():
                     "Ошибка: при указании имени (-n) нужно также указать время (-t) и часовой пояс (-z), если не используется --date-only"
                 )
                 return
-        
 
     if args.input_file:
         ext = os.path.basename(args.input_file).rsplit(".", 1)[-1].lower()
@@ -363,16 +449,25 @@ def main():
                 file_data = yaml.safe_load(f)
         else:
             print(f"Неизвестный формат входного файла: {ext}")
-            exit(1)
+            sys.exit(1)
 
-        input_value : JsonInput = JsonInput.from_dict(file_data)
-        name, dt_loc, svg_theme = input_value.name, input_value.event.dt_loc(), input_value.event.svg_theme
-        logger.debug("Разобран файл параметров: name=%s, dt_loc=%s, svg_theme=%s", name, dt_loc, svg_theme)
+        input_value: JsonInput = JsonInput.from_dict(file_data)
+        name, dt_loc, svg_theme = (
+            input_value.name,
+            input_value.event.dt_loc(),
+            input_value.event.svg_theme,
+        )
+        logger.debug(
+            "Разобран файл параметров: name=%s, dt_loc=%s, svg_theme=%s",
+            name,
+            dt_loc,
+            svg_theme,
+        )
         output_name = (
-                args.output_name
-                if args.output_name
-                else os.path.basename(args.input_file).rsplit(".", 1)[0]
-            )
+            args.output_name
+            if args.output_name
+            else os.path.basename(args.input_file).rsplit(".", 1)[0]
+        )
     else:
         name = args.name
         try:
@@ -398,12 +493,12 @@ def main():
 
         dt_loc = DatetimeLocation(datetime=dt, location=location)
         output_name = args.output_name if args.output_name else args.name
-    
+
     output_dir = os.path.abspath(args.output_dir)
     os.makedirs(output_dir, exist_ok=True)
     output_name = os.path.join(output_dir, output_name)
     logger.debug("Используется имя для вывода: %s", output_name)
-    
+
     output_params = OutputParams(
         png_path=f"{output_name}.png" if args.png else None,
         svg_chart_path=f"{output_name}_chart.svg" if args.svg_chart else None,

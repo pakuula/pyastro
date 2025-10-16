@@ -23,3 +23,6 @@ pyastro-validate = "pyastro.validate:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = "line-too-long,no-else-return,import-outside-toplevel,superfluous-parens"

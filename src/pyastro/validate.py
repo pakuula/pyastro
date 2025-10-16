@@ -30,7 +30,7 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
     if yaml is None:
         raise ImportError("PyYAML не установлен. Установите: pip install PyYAML")
 
-    class NoDateLoader(yaml.SafeLoader):
+    class NoDateLoader(yaml.SafeLoader):  # pylint: disable=too-many-ancestors
         """Загрузчик YAML без преобразования дат"""
 
         pass  # pylint: disable=unnecessary-pass
@@ -74,6 +74,7 @@ def load_data(file_path: Path) -> Dict[str, Any]:
     """Автоматически определяет тип файла и загружает данные"""
     suffix = file_path.suffix.lower()
 
+    # pylint: disable=no-else-return
     if suffix == ".json":
         return load_json(file_path)
     elif suffix in [".yaml", ".yml"]:
@@ -85,6 +86,7 @@ def load_data(file_path: Path) -> Dict[str, Any]:
 
 def load_schema(schema_path_or_url: str) -> Dict[str, Any]:
     """Загружает схему из файла или URL"""
+    # pylint: disable=no-else-return
     if is_url(schema_path_or_url):
         return load_schema_from_url(schema_path_or_url)
     else:
@@ -150,6 +152,7 @@ def validate_file(
 
 
 def main():
+    """Главная функция для запуска из командной строки валидатора входных данных."""
     parser = argparse.ArgumentParser(
         description="Валидатор JSON/YAML файлов по JSON Schema"
     )

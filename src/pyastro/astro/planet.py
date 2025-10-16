@@ -1,3 +1,4 @@
+"""Модуль для работы с планетами и их позициями в гороскопе."""
 from dataclasses import dataclass
 from enum import Enum
 from typing import Self
@@ -43,24 +44,24 @@ class PlanetSpec:
 
     def dignity(self, sign: ZodiacSign) -> EssentialDignity | None:
         """Возвращает достоинство планеты в данном знаке зодиака."""
-        if sign in self.domicile:
+        if self.domicile and sign in self.domicile:
             return EssentialDignity.DOMICILE
         elif sign == self.exaltation:
             return EssentialDignity.EXALTATION
-        elif sign in self.detriment:
+        elif self.detriment and sign in self.detriment:
             return EssentialDignity.DETRIMENT
         elif sign == self.fall:
             return EssentialDignity.FALL
         else:
             return None
 
-        
+
 # swisseph/swephexp.h
 # /*
 #  * planet numbers for the ipl parameter in swe_calc()
 #  */
 # #define SE_ECL_NUT      -1
-# 
+#
 # #define SE_SUN          0
 # #define SE_MOON         1
 # #define SE_MERCURY      2
@@ -129,17 +130,17 @@ class Planet(Enum):
     SUN = PlanetSpec(
         code=0,
         symbol="☉",
-        domicile=(ZodiacSign.LEO),
+        domicile=(ZodiacSign.LEO,),
         exaltation=ZodiacSign.ARIES,
-        detriment=(ZodiacSign.AQUARIUS),
+        detriment=(ZodiacSign.AQUARIUS,),
         fall=ZodiacSign.LIBRA,
     )
     MOON = PlanetSpec(
         code=1,
         symbol="☽",
-        domicile=(ZodiacSign.CANCER),
+        domicile=(ZodiacSign.CANCER,),
         exaltation=ZodiacSign.TAURUS,
-        detriment=(ZodiacSign.CAPRICORN),
+        detriment=(ZodiacSign.CAPRICORN,),
         fall=ZodiacSign.SCORPIO,
     )
     # по старой традиции Меркурий управляет Девой и экзальтирует в Деве, следовательно в падении находится в Рыбах,
@@ -188,25 +189,25 @@ class Planet(Enum):
         code=7,
         symbol="♅",
         domicile=(ZodiacSign.AQUARIUS,),
-        exaltation=ZodiacSign.SCORPIO,
+        exaltation=None,  # ZodiacSign.SCORPIO,
         detriment=(ZodiacSign.LEO,),
-        fall=ZodiacSign.TAURUS,
+        fall=None,  # ZodiacSign.TAURUS,
     )
     NEPTUNE = PlanetSpec(
         code=8,
         symbol="♆",
         domicile=(ZodiacSign.PISCES,),
-        exaltation=ZodiacSign.LEO,
+        exaltation=None,  # ZodiacSign.SAGITTARIUS,
         detriment=(ZodiacSign.VIRGO,),
-        fall=ZodiacSign.CAPRICORN,
+        fall=None,  # ZodiacSign.GEMINI,
     )
     PLUTO = PlanetSpec(
         code=9,
         symbol="⯓",
         domicile=(ZodiacSign.SCORPIO,),
-        exaltation=ZodiacSign.ARIES,
+        exaltation=None,  # ZodiacSign.LEO,
         detriment=(ZodiacSign.TAURUS,),
-        fall=ZodiacSign.LIBRA,
+        fall=None,  # ZodiacSign.AQUARIUS,
     )
     NORTH_NODE = PlanetSpec(10, "☊")  # символ U+260A
     SOUTH_NODE = PlanetSpec(10, "☋")  # символ U+260B
@@ -267,7 +268,7 @@ class Planet(Enum):
     def fall(self) -> ZodiacSign:
         """Возвращает знак зодиака, в котором планета находится в падении."""
         return self.value.fall
-    
+
     def dignity(self, sign: ZodiacSign) -> EssentialDignity | None:
         """Возвращает достоинство планеты в данном знаке зодиака."""
         return self.value.dignity(sign)
@@ -281,6 +282,7 @@ class Planet(Enum):
         """Возвращает True, если планета - Южный узел."""
         return self == Planet.SOUTH_NODE
 
+
 CLASSIC_PLANETS = (
     Planet.SUN,
     Planet.MOON,
@@ -293,6 +295,7 @@ CLASSIC_PLANETS = (
 
 NEW_PLANETS = CLASSIC_PLANETS + (Planet.URANUS, Planet.NEPTUNE, Planet.PLUTO)
 NEW_PLANETS_WITH_NODES = NEW_PLANETS + (Planet.NORTH_NODE, Planet.SOUTH_NODE)
+
 
 @dataclass
 class PlanetPosition:
@@ -321,10 +324,14 @@ class PlanetPosition:
     @staticmethod
     def from_swe_data(planet: Planet, swe_data: list[float]) -> Self:
         """Создает PlanetPosition из данных, возвращаемых Swiss Ephemeris."""
-        latitude=swe_data[1] % 90 if swe_data[1] >= 0 else -(abs(swe_data[1]) % 90)
+        latitude = swe_data[1] % 90 if swe_data[1] >= 0 else -(abs(swe_data[1]) % 90)
         return PlanetPosition(
             planet=planet,
-            longitude=swe_data[0] % 360 if not planet.is_south_node() else (swe_data[0] + 180) % 360,
+            longitude=(
+                swe_data[0] % 360
+                if not planet.is_south_node()
+                else (swe_data[0] + 180) % 360
+            ),
             latitude=latitude if not planet.is_south_node() else -latitude,
             distance=swe_data[2],
             longitude_speed=swe_data[3],
@@ -346,28 +353,27 @@ class PlanetPosition:
     def is_retrograde(self) -> bool:
         """Возвращает True, если планета ретроградна."""
         return self.longitude_speed < 0
-    
-    
+
     @property
     def is_domicile(self) -> bool:
         """Возвращает True, если планета в обители."""
         return self.zodiac_sign in self.planet.domicile
-    
+
     @property
     def is_exaltation(self) -> bool:
         """Возвращает True, если планета в экзальтации."""
         return self.zodiac_sign == self.planet.exaltation
-    
+
     @property
     def is_detriment(self) -> bool:
         """Возвращает True, если планета в падении."""
         return self.zodiac_sign in self.planet.detriment
-    
+
     @property
     def is_fall(self) -> bool:
         """Возвращает True, если планета в падении."""
         return self.zodiac_sign == self.planet.fall
-    
+
     @property
     def dignity(self) -> EssentialDignity | None:
         """Возвращает достоинство планеты в данном знаке зодиака."""

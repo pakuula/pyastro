@@ -113,7 +113,9 @@ def process_data(
         chart,
         svg_theme,
         # Асцендент на востоке
-        angle=-chart.ascendant if chart.ascendant is not None else 0,
+        # angle=-chart.ascendant if chart.ascendant is not None else 0,
+        # Равноденствие на востоке
+        angle=0,
     )
     svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
     

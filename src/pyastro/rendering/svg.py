@@ -1,15 +1,18 @@
 """SVG rendering for natal chart (Chart object)."""
+# pylint: disable=line-too-long
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
 from math import cos, sin, radians, pi
-from typing import Any, Iterable, Optional, get_args, get_origin
+from typing import Optional
 
 from ..util.angle import Angle, Latitude, Longitude
 
 from ..astro import Chart, AspectKind, Planet, ZodiacSign
+
+from .svg_theme import SvgTheme
 
 logger = logging.getLogger(__name__)
 
@@ -31,310 +34,13 @@ _ROMAN = {
 
 
 def int_to_subscript(n: int) -> str:
+    """Возвращает подстрочный индекс для чисел 0..29."""
     return str(n % 30).translate(_SUB_MAP)
 
 
 def to_roman(n: int) -> str:
+    """Преобразует число 1..12 в римскую цифру, иначе возвращает строковое представление."""
     return _ROMAN.get(n, str(n))
-
-
-@dataclass
-class Shift:
-    """Задает смещения для подписей планет, чтобы не пересекались."""
-
-    dr: float = 0.0  # радиальное смещение
-    dangle: float = 0.0  # угловое смещение (в градусах)
-
-    @staticmethod
-    def from_dict(data: dict) -> Shift:
-        """Создает Shift из JSON-объекта {"dr": float, "dangle": float}."""
-        if not isinstance(data, dict):
-            raise ValueError("Shift data must be an object")
-        return Shift(dr=data.get("dr", 0.0), dangle=data.get("dangle", 0.0))
-
-
-@dataclass
-class SvgTheme:
-    # Параметры полярной системы координат относительно стандартной системы
-    clockwise: bool = False  # направление возрастания угла
-    zero_at: int = 180  # Положение 0° Овна, 0 - справа (3 часа), 180 - слева (9 часов)
-
-    width: int = 800
-    height: int = 800
-    margin: int = 40
-    background: str = "#ffffff"
-    circle_stroke: str = "#222"
-    circle_stroke_width: float = 2.0
-    
-    houses_outer_stroke: str = "#000000"
-    houses_outer_stroke_width: float = 0.0
-    # монохромные цвета для зодиака если не задано zodiac_fill
-    zodiac_ring_fill: str = "#fafafa"
-    zodiac_alt_fill: str = "#f0f0f0"
-    # список цветов для знаков, цвет для знака i = zodiac_fill[i % len(zodiac_fill)]
-    zodiac_fill: list[str] = (
-        None  # цветной зодиак: ["#FFDDC1", "#C1E1FF", "#C1FFD7", "#FFFAC1", "#E1C1FF", "#FFC1C1"]
-    )
-    zodiac_border: str = "#999"
-
-    # Параметры подписей планет
-    planet_font_size: int = 20
-    planet_angle_baseline_shift = "+30%"  # чтобы верхняя линия индекса примерно совпадала с верхней линией символа
-    planet_retro_baseline_shift = "-30%"
-    planet_color: str = "#000"
-    planet_symbol_offset: float = 25.0
-    # Параметры подписей знаков зодиака
-    sign_font_size: int = 16
-    sign_color: str = "#444"
-    # обводка для некоторых символов планет в некоторых шрифтах
-    planet_symbol_outlines: dict[str, float] = None  # {"VENUS": 1.5, "MARS": 1.5}
-
-    # Масштаб шрифта для дополнительной информации (например, градусы домов)
-    extra_info_scale: float = 0.66
-
-    aspect_colors: dict[AspectKind, str] = None
-    aspect_width: float = 1.6
-    tick_length: float = 6.0
-    tick_width: float = 1.6
-    tick_color: str = "#333"
-    tick_opacity: float = 0.85
-    # Дополнительное тонкое кольцо с десятиградусными насечками
-    tick_limb_width: float = (
-        4.0  # planet_r - (planet_r - tick_limb_width) => ширина кольца для 10° насечек
-    )
-    # Параметры разведения планет
-    min_planet_separation_deg: float = 4.0  # кластерный порог (как было)
-    cluster_min_pixel_gap: float = (
-        16.0  # минимальный пиксельный зазор вдоль дуги между центрами символов
-    )
-    max_cluster_fan_deg: float = (
-        14.0  # ограничение общей веерной ширины кластера (если возможно)
-    )
-    planet_stack_spacing_px: float = (
-        14.0  # радиальное смещение при необходимости доп. слоёв
-    )
-    max_planet_stack_layers: int = 2  # максимум слоёв (обычно достаточно 2)
-    allow_radial_stack: bool = (
-        True  # включать ли радиальное дублирование при слишком плотных кластерах
-    )
-    # Символы аспектов
-    show_aspect_symbols: bool = True
-    aspect_symbol_font_size: int = 14
-    aspect_symbol_fill: str = "#000"
-    aspect_symbol_bg: str | None = None  # фон отключен
-    aspect_symbol_bg_radius: float = 11.0
-    aspect_symbol_bg_opacity: float = 0.85
-    aspect_symbol_outline: str | None = "#000"
-    aspect_symbol_outline_width: float = 0.6
-    # Выделение соединений (дуга по окружности planet_r)
-    highlight_conjunctions: bool = True
-    conjunction_highlight_color: str = "#009975"  # изумрудно-зелёный
-    conjunction_arc_stroke_width: float = 10.0
-    conjunction_arc_inner_inset: float = 0.0  # смещение внутрь (уменьшаем радиус дуги)
-    conjunction_arc_end_padding_deg: float = (
-        1.2  # срез по углам (чтобы не упираться в символы)
-    )
-    # Базовые отметки позиций планет на окружности planet_r
-    show_planet_base_points: bool = True
-    planet_base_point_radius: float = 5.0
-    planet_base_point_fill: str = "#cccccc"
-    planet_base_point_stroke: str = "#000000"
-    planet_base_point_stroke_width: float = 0.6
-
-    # Радиусы колец относительно максимального радиуса, равного половине высоты/ширины диаграммы
-    house_outer_ratio: float = 1.0 # Внешний радиус домов
-    zodiac_outer_ratio: float = 0.86 # Коэффициент радиуса внешнего кольца зодиака
-    zodiac_inner_ratio: float = 0.75  # внутренний радиус зодиака относительно внешнего радиуса домов
-    planet_inner_ratio: float = 0.60  # радиус планет относительно внешнего радиуса домов
-
-    # Параметры подписей домов
-    house_num_font_size: int = 14
-    house_num_color: str = "#555"
-    # Смещения подписей домов, чтобы не пересекать линии куспидов
-    house_label_tangent_offset_px: float = 16.0  # смещение вдоль касательной (CCW)
-    house_label_angle_offset_deg: float = 0.5  # небольшой угловой сдвиг CCW
-    # Сдвиг значения угла дома относительно базовой линии номера.
-    house_angle_baseline_shift: str = (
-        "+30%"  # чтобы верхняя линия индекса примерно совпадала с верхней линией номера дома
-    )
-
-    manual_shifts: dict[str, Shift] = None  # ручные смещения подписей планет
-
-    def __post_init__(self):
-        if self.aspect_colors is None:
-            # Цвета: секстиль красный, квадрат тёмно-синий, трин оранжевый, оппозиция чёрная
-            self.aspect_colors = {
-                AspectKind.CONJUNCTION: "#000000",  # без изменения
-                AspectKind.SEXTILE: "#ff0000",  # красный
-                AspectKind.SQUARE: "#00008b",  # тёмно-синий
-                AspectKind.TRINE: "#ff8800",  # оранжевый
-                AspectKind.OPPOSITION: "#000000",  # чёрный
-            }
-        if self.manual_shifts is None:
-            self.manual_shifts = {}
-        if self.planet_symbol_outlines is None:
-            self.planet_symbol_outlines = {}
-
-    @staticmethod
-    def aspect_colors_from_dict(data: dict) -> dict[AspectKind, str]:
-        """Создает словарь цветов аспектов из JSON-объекта {"CONJUNCTION": color, ...}."""
-        if not isinstance(data, dict):
-            raise ValueError("Aspect colors data must be an object")
-        result = {}
-        for k, v in data.items():
-            try:
-                ak = AspectKind[k.upper()]
-                result[ak] = str(v)
-            except KeyError:
-                logging.warning("Unknown aspect kind in aspect_colors: %s", k)
-        return result
-
-    @staticmethod
-    def manual_shifts_from_dict(data: dict) -> dict[str, Shift]:
-        """Создает словарь ручных смещений планет из JSON-объекта {"PLANET": {"dr": float, "dangle": float}, ...}."""
-        if not isinstance(data, dict):
-            raise ValueError("Manual shifts data must be an object")
-        result = {}
-        for k, v in data.items():
-            if not isinstance(v, dict):
-                logging.warning(
-                    "Invalid shift data for planet '%s' - %s - skipping", k, v
-                )
-                continue
-            try:
-                result[k.upper()] = Shift.from_dict(v)
-            except ValueError as e:
-                logging.error(
-                    "Invalid shift data for planet '%s' - %s: %s - skipping", k, v, e
-                )
-        return result
-
-    @staticmethod
-    def from_dict(data: dict) -> SvgTheme:
-        """Создает тему из JSON-объекта."""
-        theme = SvgTheme()
-        for field, spec in theme.__dataclass_fields__.items():  # pylint: disable=E1101
-            if field in data:
-                value = data[field]
-                if field == "aspect_colors":
-                    if not isinstance(value, dict):
-                        raise ValueError("aspect_colors must be a dictionary")
-                    # Преобразуем ключи в AspectKind
-                    new_dict = {}
-                    for k, v in value.items():
-                        try:
-                            ak = AspectKind[k.upper()]
-                            new_dict[ak] = v
-                        except KeyError:
-                            pass
-                    setattr(theme, field, new_dict)
-                elif field == "manual_shifts":
-                    if not isinstance(value, dict):
-                        raise ValueError("manual_shifts must be a dictionary")
-                    new_dict = {}
-                    for k, v in value.items():
-                        try:
-                            logging.debug(
-                                "Parsing manual shift for planet '%s': %s", k, v
-                            )
-                            new_dict[k.upper()] = Shift.from_dict(v)
-                        except ValueError as e:
-                            logging.error(
-                                "Invalid shift data for planet '%s' - %s: %s - skipping",
-                                k,
-                                v,
-                                e,
-                            )
-                    setattr(theme, field, new_dict)
-                else:
-                    # проверить, что тип совпадает (или совместим) с типом поля
-                    try:
-                        # value = spec.type(value)  # попытка преобразования
-                        logger.debug("Coerce field '%s' of type %s to type %s", field, type(value), spec.type)
-                        if spec.type == int or spec.type == 'int':
-                            value = int(value)
-                        elif spec.type == float or spec.type == 'float':
-                            value = float(value)
-                        elif spec.type == bool or spec.type == 'bool':
-                            if isinstance(value, bool):
-                                pass
-                            elif isinstance(value, str):
-                                value = value.lower() in ("1", "true", "yes", "on")
-                            else:
-                                value = bool(value)
-                        elif spec.type == list or spec.type == 'list' or (isinstance(spec.type, str) and spec.type.startswith("list[")):
-                            if not isinstance(value, (list, tuple, Iterable)):
-                                raise ValueError(f"Field '{field}' must be an iterable")
-                            value = list(value)
-                        elif spec.type == dict or spec.type == 'dict' or (isinstance(spec.type, str) and spec.type.startswith("dict[")):
-                            if not isinstance(value, dict):
-                                raise ValueError(f"Field '{field}' must be a dictionary")
-                            value = dict(value)
-                        elif spec.type == tuple or spec.type == 'tuple' or (isinstance(spec.type, str) and spec.type.startswith("tuple[")):
-                            if not isinstance(value, (list, tuple, Iterable)):
-                                raise ValueError(f"Field '{field}' must be an iterable")
-                            value = tuple(value)
-                        else:
-                            logger.warning("No coercion rule for field '%s' of type %s, using as is", field, spec.type)
-                            
-                    except (TypeError, ValueError) as e:
-                        raise ValueError(
-                            f"Invalid type for field '{field}': expected {spec.type}, got {type(value)}({value}): {e}"
-                        ) from e
-                    setattr(theme, field, value)
-        return theme
-
-
-def _coerce_type(t: Any, val: Any, field_name: str):
-    logger.debug(f"_coerce_type: type {repr(t)}, type of type specifier: {type(t)}")
-    origin = get_origin(t)
-    logger.debug("Coerce type: %s, origin: %s, value: %s (%s)", t, origin, val, type(val))
-    if origin is None:
-        # Простой тип
-        if isinstance(t, type):
-            if isinstance(val, t):
-                return val
-            try:
-                return t(val)
-            except Exception as e:  # noqa: BLE001
-                raise ValueError(
-                    f"Invalid value for '{field_name}': cannot cast {val!r} to {t}"
-                ) from e
-        elif isinstance(t, str):
-            if (t == "list" or t.startswith("list[")) and isinstance(val, (Iterable)):
-                return list(val)
-            elif (t == "tuple" or t.startswith("tuple[")) and isinstance(val, (Iterable)):
-                return tuple(val)
-            raise ValueError(f"Field '{field_name}' must be a list or tuple")
-        else:
-            # Аннотация без origin (например |) — просто вернуть как есть
-            raise TypeError(f"Cannot coerce field '{t}' is not a type")
-        return val
-    # Обработка generic
-    if origin in (list, tuple):
-        (elem_type,) = get_args(t) or (Any,)
-        if not isinstance(val, list):
-            raise ValueError(f"Field '{field_name}' must be a list")
-        return [
-            (
-                _coerce_type(elem_type, x, f"{field_name}[{i}]")
-                if elem_type is not Any
-                else x
-            )
-            for i, x in enumerate(val)
-        ]
-    if origin is dict:
-        key_t, val_t = get_args(t)
-        if not isinstance(val, dict):
-            raise ValueError(f"Field '{field_name}' must be a dict")
-        out = {}
-        for k, v in val.items():
-            ck = _coerce_type(key_t, k, f"{field_name}.key") if key_t is not Any else k
-            cv = _coerce_type(val_t, v, f"{field_name}[{k}]") if val_t is not Any else v
-            out[ck] = cv
-        return out
-    # Иное generic — без строгой обработки
-    return val
 
 
 # Geometry helpers
@@ -399,14 +105,15 @@ def _distribute_cluster(
     cluster, base_angle: float, base_r: float, max_allowed_r: float, theme: SvgTheme
 ) -> list[tuple[Planet, float, float]]:
     """Возвращает список (planet, angle_deg, radius). Симметричное веерное распределение.
-    Если веер превышает max_cluster_fan_deg — уменьшаем до лимита и при нехватке пиксельного зазора включаем радиальный второй слой.
+
+    Если веер превышает max_cluster_fan_deg — уменьшаем до лимита и при нехватке пиксельного
+    зазора включаем радиальный второй слой.
     """
     n = len(cluster)
     if n == 1:
         pp = cluster[0]
         return [(pp.planet, base_angle, min(base_r, max_allowed_r))]
     # Estimate required total fan in degrees from pixel gap requirement.
-    # angle_gap_deg = (cluster_min_pixel_gap / arc_length_per_degree) => arc_length_per_degree = (pi/180)*base_r
     if base_r <= 0:
         base_r = 1
     per_deg_arc = (pi / 180.0) * base_r
@@ -500,7 +207,10 @@ def chart_to_svg(
 ) -> str:
     """Возвращает SVG строку натальной карты.
 
-    angle: на сколько градусов ПОВЕРНУТЬ КОЛЬЦО ЗНАКОВ ЗОДИАКА ПРОТИВ часовой стрелки (только фоновые сектора, символы знаков и граничные 30° тики). Планеты, дома и аспекты остаются в гео-долготах без сдвига.
+    angle: на сколько градусов ПОВЕРНУТЬ КОЛЬЦО ЗНАКОВ ЗОДИАКА ПРОТИВ часовой стрелки
+    (только фоновые сектора, символы знаков и граничные 30° тики).
+
+    Планеты, дома и аспекты остаются в гео-долготах без сдвига.
     """
     if theme is None:
         theme = SvgTheme()
@@ -532,13 +242,16 @@ def chart_to_svg(
     }
 
     out: list[str] = []
-    ap = out.append
+
+    def ap(*lines: str) -> None:
+        out.extend(lines)
+
     ap(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}">'
     )
-    ap(f'<!-- {chart.name} -->')
-    ap(f'<!-- {chart.dt_loc.datetime.isoformat()}@{chart.dt_loc.location} -->')
-    ap('<!-- Generated by pyastro (https://github.com/pakuula/pyastro) -->')
+    ap(f"<!-- {chart.name} -->")
+    ap(f"<!-- {chart.dt_loc.datetime.isoformat()}@{chart.dt_loc.location} -->")
+    ap("<!-- Generated by pyastro (https://github.com/pakuula/pyastro) -->")
     ap(
         f"""<style>
     text.zodiac {{
@@ -553,14 +266,35 @@ def chart_to_svg(
       font-size: {theme.planet_font_size}px;
       fill: "{theme.planet_color}";
     }}
-    .venus  {{ stroke:{theme.planet_color}; stroke-width: {theme.planet_symbol_outlines.get("VENUS", 1.5)}; }}
-    .mars  {{ stroke:{theme.planet_color}; stroke-width: {theme.planet_symbol_outlines.get("MARS", 1.5)}; }}
+    .zodiac-sign:hover {{
+      opacity: 0.7;
+      cursor: pointer;
+    }}
+    .zodiac-tooltip {{
+      visibility: hidden;
+    }}
+    .zodiac-sign:hover .zodiac-tooltip {{
+      visibility: visible;
+    }}
+    .zodiac-tooltip text {{
+      font-size: {theme.planet_font_size*0.4}px;
+      font-weight: normal;
+      fill: white;
+    }}
+    .venus  {{ stroke:{theme.planet_color}; stroke-width: {(
+        # planet_symbol_outlines is not None: see __post_init__
+        theme.planet_symbol_outlines.get("VENUS", 1.5) # type: ignore
+    )} }}
+    .mars  {{ stroke:{theme.planet_color}; stroke-width: {(
+        # planet_symbol_outlines is not None: see __post_init__
+        theme.planet_symbol_outlines.get("MARS", 1.5) # type: ignore
+    )} }}
     .sun {{ font-size: {theme.planet_font_size*1.24}px; }}
   </style>"""
     )
     ap(f'<rect x="0" y="0" width="{w}" height="{h}" fill="{theme.background}" />')
 
-    ap('<!-- Zodiac chart sectors -->')
+    ap("<!-- Zodiac chart sectors -->")
     # Zodiac ring sectors
     for i in range(12):
         # start_angle = i * 30 + ring_angle_offset
@@ -584,21 +318,13 @@ def chart_to_svg(
             f'<path d="{path}" fill="{fill}" stroke="{theme.zodiac_border}" stroke-width="0.5" />'
         )
 
-    # Zodiac signs glyphs
-    ap('<!-- Zodiac signs glyphs -->')
-    for i, sign in enumerate(ZodiacSign):
-        # mid_angle = i * 30 + 15 + ring_angle_offset
-        mid_angle = i * 30 + 15  # середина сектора
-        tx, ty = polar(mid_angle, (zodiac_r_outer + zodiac_r_inner) / 2)
-        ap(
-            f'<text class="zodiac" x="{tx:.2f}" y="{ty:.2f}" text-anchor="middle" dominant-baseline="middle">{sign.symbol}</text>'
-        )
-
     # Houses outer circle and segmented cusps
     if chart.houses:
-        ap('<!-- Houses -->')
+        ap("<!-- Houses -->")
         ap(
-            f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" fill="none" stroke="{theme.houses_outer_stroke}" stroke-width="{theme.houses_outer_stroke_width}" />'
+            f'<circle cx="{cx}" cy="{cy}" r="{houses_r_outer:.2f}" '
+            f'fill="none" stroke="{theme.houses_outer_stroke}" '
+            f'stroke-width="{theme.houses_outer_stroke_width}" />'
         )
         for house in chart.houses:
             # ang = (house.cusp_longitude + rot) % 360
@@ -606,12 +332,14 @@ def chart_to_svg(
             xpi, ypi = polar(ang, planet_r)
             xzi, yzi = polar(ang, zodiac_r_inner)
             ap(
-                f'<line x1="{xpi:.2f}" y1="{ypi:.2f}" x2="{xzi:.2f}" y2="{yzi:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+                f'<line x1="{xpi:.2f}" y1="{ypi:.2f}" x2="{xzi:.2f}" y2="{yzi:.2f}" '
+                f'stroke="{theme.circle_stroke}" stroke-width="0.7" />'
             )
             xzo, yzo = polar(ang, zodiac_r_outer)
             xho, yho = polar(ang, houses_r_outer)
             ap(
-                f'<line x1="{xzo:.2f}" y1="{yzo:.2f}" x2="{xho:.2f}" y2="{yho:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+                f'<line x1="{xzo:.2f}" y1="{yzo:.2f}" x2="{xho:.2f}" y2="{yho:.2f}" '
+                f'stroke="{theme.circle_stroke}" stroke-width="0.7" />'
             )
             # реальный угол в знаке без учёта поворота (оставляем физическое значение 0..29)
             deg_sub = round(house.cusp_longitude % 30)
@@ -636,17 +364,20 @@ def chart_to_svg(
             nty += ty
             ap(
                 f"<text x='{ntx:.2f}' y='{nty:.2f}' "
-                f"font-size='{theme.house_num_font_size}' fill='{theme.house_num_color}' font-weight='bold' "
+                f"font-size='{theme.house_num_font_size}' "
+                f"fill='{theme.house_num_color}' font-weight='bold' "
                 f"text-anchor='middle' dominant-baseline='middle'>"
                 f"{label}"
                 "</text>"
             )
 
     # Structural circles
-    ap('<!-- Horoscope rings -->')
+    ap("<!-- Horoscope rings -->")
     for r in (zodiac_r_outer, zodiac_r_inner, planet_r):
         ap(
-            f'<circle cx="{cx}" cy="{cy}" r="{r:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="{theme.circle_stroke_width}" stroke-opacity="0.9" />'
+            f'<circle cx="{cx}" cy="{cy}" r="{r:.2f}" '
+            f'fill="none" stroke="{theme.circle_stroke}" '
+            f'stroke-width="{theme.circle_stroke_width}" stroke-opacity="0.9" />'
         )
     if chart.no_houses:
         # нарисовать линии зодиакальных секторов от planet_r до zodiac_r_outer
@@ -656,7 +387,8 @@ def chart_to_svg(
             x1, y1 = polar(ang, planet_r)
             x2, y2 = polar(ang, zodiac_r_outer)
             ap(
-                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.circle_stroke}" stroke-width="0.7" />'
+                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+                f'stroke="{theme.circle_stroke}" stroke-width="0.7" />'
             )
     # Sign boundary ticks on planet_r (inward)
     tick_r_inner = max(planet_r - theme.tick_length, 0)
@@ -666,14 +398,17 @@ def chart_to_svg(
         x1, y1 = polar(ang, planet_r)
         x2, y2 = polar(ang, tick_r_inner)
         ap(
-            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.tick_color}" stroke-width="{theme.tick_width}" stroke-linecap="round" stroke-opacity="{theme.tick_opacity}" />'
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+            f'stroke="{theme.tick_color}" stroke-width="{theme.tick_width}" '
+            f'stroke-linecap="round" stroke-opacity="{theme.tick_opacity}" />'
         )
 
     # Внутреннее тонкое кольцо и 10° насечки в образованном кольце (planet_r - tick_limb_width .. planet_r)
-    ap('<!-- Limb -->')
+    ap("<!-- Limb -->")
     limb_r = max(planet_r - theme.tick_limb_width, 0)
     ap(
-        f'<circle cx="{cx}" cy="{cy}" r="{limb_r:.2f}" fill="none" stroke="{theme.circle_stroke}" stroke-width="0.4" stroke-opacity="0.6" />'
+        f'<circle cx="{cx}" cy="{cy}" r="{limb_r:.2f}" fill="none" '
+        f'stroke="{theme.circle_stroke}" stroke-width="0.4" stroke-opacity="0.6" />'
     )
     for base_ang in range(0, 360, 10):
         # ang = (base_ang + rot) % 360
@@ -681,11 +416,12 @@ def chart_to_svg(
         x1, y1 = polar(ang, planet_r)
         x2, y2 = polar(ang, limb_r)
         ap(
-            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{theme.tick_color}" stroke-width="0.5" stroke-opacity="0.65" />'
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+            f'stroke="{theme.tick_color}" stroke-width="0.5" stroke-opacity="0.65" />'
         )
 
     # Аспекты
-    ap('<!-- Aspects -->')
+    ap("<!-- Aspects -->")
     if chart.aspects:
         middle_points = []
         for aspect in chart.aspects:
@@ -693,11 +429,13 @@ def chart_to_svg(
             p2 = planet_xy_base.get(aspect.planet2)
             if not p1 or not p2:
                 continue
-            color = theme.aspect_colors.get(aspect.kind, "#888")
+            # self.aspect_colors is not None: see __post_init__
+            color = theme.aspect_colors.get(aspect.kind, "#888")  # type: ignore
             x1, y1 = p1
             x2, y2 = p2
             ap(
-                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" stroke="{color}" stroke-width="{theme.aspect_width}" stroke-opacity="0.8" />'
+                f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
+                f'stroke="{color}" stroke-width="{theme.aspect_width}" stroke-opacity="0.8" />'
             )
             if theme.show_aspect_symbols and aspect.kind != AspectKind.CONJUNCTION:
                 # сначала рисуем фон
@@ -706,18 +444,19 @@ def chart_to_svg(
                 middle_points.append((mx, my, aspect.kind.symbol, color))
         # сначала рисуем заливку
         for mx, my, _, _ in middle_points:
-                ap(
-                    f'<circle cx="{mx:.2f}" cy="{my:.2f}" r="{theme.aspect_symbol_font_size / 2}" fill="{theme.background}" />'
-                )
+            ap(
+                f'<circle cx="{mx:.2f}" cy="{my:.2f}" r="{theme.aspect_symbol_font_size / 2}" '
+                f'fill="{theme.background}" />'
+            )
         # затем символы
         for mx, my, symbol, fill_color in middle_points:
-                ap(
-                    f'<text x="{mx:.2f}" y="{my:.2f}" '
-                    f'font-size="{theme.aspect_symbol_font_size}"  fill="{fill_color}" '
-                    f'text-anchor="middle" dominant-baseline="middle">{symbol}</text>'
-                )
+            ap(
+                f'<text x="{mx:.2f}" y="{my:.2f}" '
+                f'font-size="{theme.aspect_symbol_font_size}"  fill="{fill_color}" '
+                f'text-anchor="middle" dominant-baseline="middle">{symbol}</text>'
+            )
 
-    ap('<!-- Planets -->')
+    ap("<!-- Planets -->")
     # Расстояние от центра до символов планет
     base_symbol_r = min(
         planet_r + theme.planet_symbol_offset,
@@ -773,9 +512,14 @@ def chart_to_svg(
                 sx, sy = polar(start_a, arc_r)
                 ex, ey = polar(end_a, arc_r)
                 large_arc = 1 if raw_span > 180 else 0
-                path = f"M {sx:.2f} {sy:.2f} A {arc_r:.2f} {arc_r:.2f} 0 {large_arc} {orientation} {ex:.2f} {ey:.2f}"
+                path = (
+                    f"M {sx:.2f} {sy:.2f} A {arc_r:.2f} {arc_r:.2f} "
+                    f"0 {large_arc} {orientation} {ex:.2f} {ey:.2f}"
+                )
                 ap(
-                    f'<path d="{path}" stroke="{theme.conjunction_highlight_color}" stroke-width="{theme.conjunction_arc_stroke_width}" fill="none" stroke-linecap="round" />'
+                    f'<path d="{path}" stroke="{theme.conjunction_highlight_color}" '
+                    f'stroke-width="{theme.conjunction_arc_stroke_width}" '
+                    f'fill="none" stroke-linecap="round" />'
                 )
     for pp in planet_positions:
         ang, sr = layout.get(pp.planet, ((pp.longitude) % 360, base_symbol_r))
@@ -812,7 +556,9 @@ def chart_to_svg(
             ">"
             f"{deg_sub}</tspan>"
         )
-        planet_symbol = f"<tspan class='{pp.planet.name.lower()}'>{pp.planet.symbol}</tspan>{extra}"
+        planet_symbol = (
+            f"<tspan class='{pp.planet.name.lower()}'>{pp.planet.symbol}</tspan>{extra}"
+        )
 
         ap(
             f'<text class="planet" x="{sx:.2f}" y="{sy:.2f}" '
@@ -824,15 +570,91 @@ def chart_to_svg(
         pr = theme.planet_base_point_radius
         for _, (bx, by) in planet_xy_base.items():
             ap(
-                f'<circle cx="{bx:.2f}" cy="{by:.2f}" r="{pr:.2f}" fill="{theme.planet_base_point_fill}" stroke="{theme.planet_base_point_stroke}" stroke-width="{theme.planet_base_point_stroke_width}" />'
+                f'<circle cx="{bx:.2f}" cy="{by:.2f}" r="{pr:.2f}" fill="{theme.planet_base_point_fill}" '
+                f'stroke="{theme.planet_base_point_stroke}" '
+                f'stroke-width="{theme.planet_base_point_stroke_width}" />'
             )
+    # Zodiac signs glyphs
+    ap("<!-- Zodiac signs glyphs -->")
+    text_y_step = theme.planet_font_size * 0.6
+    for i, sign in enumerate(ZodiacSign):
+        # mid_angle = i * 30 + 15 + ring_angle_offset
+        mid_angle = i * 30 + 15  # середина сектора
+        tx, ty = polar(mid_angle, (zodiac_r_outer + zodiac_r_inner) / 2)
+        text_y = 5
+
+        def next_text_y():
+            nonlocal text_y
+            nonlocal text_y_step
+            y = text_y
+            text_y += text_y_step
+            return y
+
+        def text_height():
+            nonlocal text_y_step
+            nonlocal sign
+            return (
+                text_y_step  # высота строки текста
+                + text_y_step  # управитель
+                + text_y_step  # изгнание
+                + (text_y_step if sign.exaltation else 0)  # экзальтация
+                + (text_y_step if sign.fall else 0)  # падение
+            )
+
+        ap(
+            f'<g class="zodiac-sign" data-sign="{sign.name}" transform="translate({tx:.2f} {ty:.2f})">',
+            f'<text class="zodiac" text-anchor="middle" dominant-baseline="middle">{sign.symbol}</text>',
+            '<g class="zodiac-tooltip">',
+            (
+                f'<rect x="0" y="{next_text_y()}" width="120" height="{text_height()+10}" '
+                f'fill="#222" fill-opacity="0.95" rx="10" stroke="#fff" stroke-width="2"/>'
+            ),
+            (
+                f'<text x="15" y="{next_text_y()}" text-anchor="left" dominant-baseline="top">'
+                f"{sign.element} {sign.modality}</text>"
+            ),
+            (
+                f'<text x="15" y="{next_text_y()}" text-anchor="left" dominant-baseline="top">'
+                f'управитель: {",".join([p.symbol for p in sign.ruler])}'
+                "</text>"
+            ),
+            (
+                f'<text x="15" y="{next_text_y()}" text-anchor="left" dominant-baseline="top">'
+                f'изгнание: {",".join([p.symbol for p in sign.detriment])}'
+                "</text>"
+            ),
+            (
+                (
+                    f'<text x="15" y="{next_text_y()}" text-anchor="left" dominant-baseline="top">'
+                    f' {"экзальтация: " + sign.exaltation.symbol if sign.exaltation else ""}'
+                    "</text>"
+                )
+                if sign.exaltation
+                else ""
+            ),
+            (
+                (
+                    f'<text x="15" y="{next_text_y()}" text-anchor="left" dominant-baseline="top">'
+                    f' {"изгнание: " + sign.fall.symbol if sign.fall else ""}'
+                    "</text>"
+                )
+                if sign.fall
+                else ""
+            ),
+            "</g>",
+            "</g>",
+        )
 
     ap("</svg>")
     return "\n".join(out)
 
 
-def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None = None):
-    """Возвращает SVG строку документа натальной карты - натальная карта с информацией о человеке и таблицами планет и домов."""
+def to_svg(
+    chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None = None
+):
+    """Возвращает SVG строку документа натальной карты.
+
+    Натальная карта с информацией о человеке и таблицами планет и домов."""
     if svg_chart is None:
         round_chart = chart_to_svg(chart, theme)
     else:
@@ -846,21 +668,23 @@ def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None
     ap(
         f"""<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">"""
     )
-    ap('<style> text.text { font-family: serif; } </style>')
+    ap("<style> text.text { font-family: serif; } </style>")
 
     ap(f'<svg x="200" y="0">{round_chart}</svg>')
     ap('<svg x="0" y="0">')
     ap(
         f'<rect x="0" y="0" width="200" height="{height}" fill="{theme.background if theme else "#fff"}" />'
     )
-    ap('<text class="text" x="10" y="40" font-size="24" font-weight="bold">Натальная карта</text>')
+    ap(
+        '<text class="text" x="10" y="40" font-size="24" font-weight="bold">Натальная карта</text>'
+    )
     ap(
         f'<text class="text" x="10" y="80" font-size="18">Имя: {chart.name if chart.name else "Не указано"}</text>'
     )
     ap(
         f'<text class="text" x="10" y="110" font-size="18">'
         f'Дата: {chart.datetime.strftime("%Y-%m-%d %H:%M")} {chart.datetime.tzinfo}'
-        f'</text>'
+        f"</text>"
     )
     ap(
         f'<text class="text" x="10" y="140" font-size="20">'
@@ -868,30 +692,42 @@ def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None
         # f"({Latitude( chart.location.latitude)}, {Longitude(chart.location.longitude)})"
         f"</text>"
     )
-    ap(f'<text class="text" x="20" y="165" font-size="18">Широта: {Latitude(chart.location.latitude)}</text>')
-    ap(f'<text class="text" x="20" y="190" font-size="18">Долгота: {Longitude(chart.location.longitude)}</text>')
-    ap('<text class="text" x="10" y="240" font-size="16" font-style="italic">Тропический зодиак</text>')
-    ap('<text class="text" x="10" y="265" font-size="16" font-style="italic">Система домов: Плацидус</text>')
+    ap(
+        f'<text class="text" x="20" y="165" font-size="18">Широта: {Latitude(chart.location.latitude)}</text>'
+    )
+    ap(
+        f'<text class="text" x="20" y="190" font-size="18">Долгота: {Longitude(chart.location.longitude)}</text>'
+    )
+    ap(
+        '<text class="text" x="10" y="240" font-size="16" font-style="italic">Тропический зодиак</text>'
+    )
+    ap(
+        '<text class="text" x="10" y="265" font-size="16" font-style="italic">Система домов: Плацидус</text>'
+    )
     ap("</svg>")
     ap(f'<svg x="{theme.width + 200 if theme else 1000}" y="0">')
     ap(
         f'<rect x="0" y="0" width="200" height="{height}" fill="{theme.background if theme else "#fff"}" />'
     )
-    ap('<text class="text" x="0" y="40" font-size="20" font-weight="bold">Планеты</text>')
+    ap(
+        '<text class="text" x="0" y="40" font-size="20" font-weight="bold">Планеты</text>'
+    )
     start_y = 70
     line_h = 25
     for pp in sorted(chart.planet_positions, key=lambda p: p.planet.code):
         sign = pp.zodiac_sign
         angle = pp.angle_in_sign()
         retro = "R" if pp.is_retrograde() else ""
-        ap(f'<g transform="translate(0,{start_y})">'
-           f'<text font-size="18">{pp.planet.symbol}</text>'
-           f'<text class="text" font-size="18" x="25">{retro}</text>'
-           f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
-           f'<text font-size="18" x="140">{sign.symbol}</text>'
-           f'</g>')
+        ap(
+            f'<g transform="translate(0,{start_y})">'
+            f'<text font-size="18">{pp.planet.symbol}</text>'
+            f'<text class="text" font-size="18" x="25">{retro}</text>'
+            f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
+            f'<text font-size="18" x="140">{sign.symbol}</text>'
+            f"</g>"
+        )
         start_y += line_h
-    
+
     start_y += 20
     ap(f'<text x="0" y="{start_y}" font-size="20" font-weight="bold">Дома</text>')
     start_y += 30
@@ -899,11 +735,13 @@ def to_svg(chart: Chart, svg_chart: Optional[str] = None, theme: SvgTheme | None
         house_name = house_pos.roman_number
         sign = house_pos.zodiac_sign
         angle = house_pos.angle_in_sign
-        ap(f'<g transform="translate(0,{start_y})">'
-           f'<text font-size="18">{house_name}</text>'
-           f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
-           f'<text font-size="18" x="140">{sign.symbol}</text>'
-           f'</g>')
+        ap(
+            f'<g transform="translate(0,{start_y})">'
+            f'<text font-size="18">{house_name}</text>'
+            f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
+            f'<text font-size="18" x="140">{sign.symbol}</text>'
+            f"</g>"
+        )
         start_y += line_h
     ap("</svg>")
     ap("</svg>")

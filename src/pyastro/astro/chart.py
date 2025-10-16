@@ -1,4 +1,4 @@
-
+"""Модуль для работы с астрологическими картами, аспектами и их вычислениями."""
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -27,7 +27,7 @@ class AspectKind(Enum):
     def symbol(self) -> str:
         """Возвращает символ аспекта."""
         return self.value[1]
-    
+
     @property
     def short_name(self) -> str:
         """Возвращает короткое имя аспекта."""
@@ -104,27 +104,43 @@ class Aspect:
             max_orb=max_orb,
         )
 
+
 class AspectList(list[Aspect]):
     """Список аспектов с дополнительными методами."""
 
     def by_type(self, aspect_type: AspectKind) -> Self:
         """Возвращает список аспектов заданного типа."""
-        return AspectList([aspect for aspect in self if aspect.kind == aspect_type])
+        return AspectList([aspect for aspect in self if aspect.kind == aspect_type])  # type: ignore
 
     def by_planet(self, planet: Planet) -> Self:
         """Возвращает список аспектов, в которых участвует заданная планета."""
-        return AspectList([
-            aspect
-            for aspect in self
-            if aspect.planet1 == planet or aspect.planet2 == planet
-        ])
-    
+        return AspectList(
+            [
+                aspect
+                for aspect in self
+                if planet in (aspect.planet1, aspect.planet2)
+            ]
+        )  # type: ignore
+
     def sorted_by_planets(self) -> Self:
         """Возвращает список аспектов, отсортированный по именам планет."""
-        return AspectList(sorted(self, key=lambda aspect: (aspect.planet1, aspect.planet2)))
+        return AspectList(
+            sorted(self, key=lambda aspect: (aspect.planet1, aspect.planet2))
+        )  # type: ignore
+
     def sorted_by_kind_and_planets(self) -> Self:
         """Возвращает список аспектов, отсортированный по типу аспекта и именам планет."""
-        return AspectList(sorted(self, key=lambda aspect: (aspect.kind.value[0], aspect.planet1, aspect.planet2)))
+        return AspectList(
+            sorted(
+                self,
+                key=lambda aspect: (
+                    aspect.kind.value[0],
+                    aspect.planet1,
+                    aspect.planet2,
+                ),
+            )
+        )  # type: ignore
+
 
 def get_aspects(
     planet_positions: list[PlanetPosition],
@@ -142,12 +158,11 @@ def get_aspects(
     for p1, p2 in combinations(planet_positions, 2):
         for aspect_type in aspect_types:
             max_orb = max_orbs.get(aspect_type, DEFAULT_ORB)
-            aspect = Aspect.aspect_or_none(
-                p1, p2, aspect_type, max_orb=max_orb
-            )
+            aspect = Aspect.aspect_or_none(p1, p2, aspect_type, max_orb=max_orb)
             if aspect is not None:
                 aspects.append(aspect)
     return aspects
+
 
 def get_planet_houses(
     planet_positions: list[PlanetPosition], house_positions: list[HousePosition]
@@ -161,6 +176,7 @@ def get_planet_houses(
                 break
     return planet_houses
 
+
 def get_house_planets(
     planet_positions: list[PlanetPosition], house_positions: list[HousePosition]
 ) -> dict[int, list[Planet]]:
@@ -173,15 +189,26 @@ def get_house_planets(
                 break
     return house_planets
 
+
 class Chart:
     """Астрологическая карта, включающая позиции планет, куспиды домов и аспекты."""
-    def __init__(self, name: str, dt_loc: DatetimeLocation, house_system: HouseSystem = HouseSystem.PLACIDUS):
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+        self,
+        name: str,
+        dt_loc: DatetimeLocation,
+        house_system: HouseSystem = HouseSystem.PLACIDUS,
+    ):
         self.name = name
         self.dt_loc = dt_loc
         self.house_system = house_system
 
-        self.planet_positions: list[PlanetPosition] = self.dt_loc.get_all_planet_positions()
-        self.aspects: AspectList = get_aspects(self.planet_positions).sorted_by_kind_and_planets()
+        self.planet_positions: list[PlanetPosition] = (
+            self.dt_loc.get_all_planet_positions()
+        )
+        self.aspects: AspectList = get_aspects(
+            self.planet_positions
+        ).sorted_by_kind_and_planets()
 
         if dt_loc.date_only:
             self.houses = []
@@ -193,25 +220,31 @@ class Chart:
             self.house_planets = {}
             self.no_houses = True
         else:
-            self.houses: list[HousePosition] = self.dt_loc.get_house_cusps(self.house_system)
+            self.houses: list[HousePosition] = self.dt_loc.get_house_cusps(
+                self.house_system
+            )
             self.ascendant: float = self.houses[0].cusp_longitude
             self.descendant: float = (self.ascendant + 180) % 360
             self.midheaven: float = self.houses[9].cusp_longitude
             self.imum_coeli: float = self.houses[3].cusp_longitude
-            self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(self.planet_positions, self.houses)
-            self.house_planets: dict[int, list[Planet]] = get_house_planets(self.planet_positions, self.houses)
+            self.planet_houses: dict[Planet, HousePosition] = get_planet_houses(
+                self.planet_positions, self.houses
+            )
+            self.house_planets: dict[int, list[Planet]] = get_house_planets(
+                self.planet_positions, self.houses
+            )
             self.no_houses = False
 
     @property
     def datetime(self) -> datetime:
         """Возвращает дату и время карты."""
         return self.dt_loc.datetime
-    
+
     @property
     def location(self) -> GeoPosition:
         """Возвращает географическое положение карты."""
         return self.dt_loc.location
-    
+
     def planet_position(self, planet: Planet) -> PlanetPosition | None:
         """Возвращает позицию планеты в карте или None, если планета не найдена."""
         for pos in self.planet_positions:
