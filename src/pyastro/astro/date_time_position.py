@@ -2,16 +2,56 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional, Self
+from typing import Callable, Dict, Optional, Type
 from zoneinfo import ZoneInfo
 
+import swisseph as swe
+
+from pyastro.util.angle import parse_lat, parse_lon
 from pyastro.util.parse_time import datetime_from_dict
 
 from .houses import HousePosition, HouseSystem
-from .planet import Planet, PlanetPosition, NEW_PLANETS_WITH_NODES
-from pyastro.util.angle import parse_lat, parse_lon
+from .planet import NEW_PLANETS_WITH_NODES, Planet, PlanetPosition
 
-import swisseph as swe
+
+def value_from_dict[T](
+    data: dict,
+    key: str,
+    expected_types: Dict[Type, Callable],
+    default: Optional[T] = None,
+) -> T:
+    """Извлекает значение из словаря и преобразует его в один из ожидаемый тип.
+
+    :param data: Словарь для извлечения значения.
+    :param key: Ключ для извлечения значения.
+    :param expected_types: Словарь типов и функций преобразования.
+    :param default: Значение по умолчанию, если ключ отсутствует.
+    :raises ValueError: Если ключ отсутствует и значение по умолчанию не задано.
+    :raises TypeError: Если тип значения не соответствует ожидаемым типам.
+    :return: Преобразованное значение.
+
+    Пример использования:
+    ```python
+    longitude = value_from_dict(
+            data, "longitude", {int: float, float: float, str: parse_lon}
+        )
+    elevation = value_from_dict(
+            data, "elevation", {int: float, float: float}, default=0.0
+        )
+    ```
+    """
+    if key not in data:
+        if default is not None:
+            return default
+        raise ValueError(f"JSON должен содержать поле '{key}'")
+    value = data[key]
+    for expected_type, converter in expected_types.items():
+        if isinstance(value, expected_type):
+            return converter(value)
+    expected_type_names = ", ".join([t.__name__ for t in expected_types.keys()])
+    raise TypeError(
+        f"Invalid type for '{key}': expected one of ({expected_type_names}), got {type(value)}"
+    )
 
 
 @dataclass
@@ -27,42 +67,58 @@ class GeoPosition:
     def from_dict(data: dict) -> "GeoPosition":
         """Создает GeoPosition из JSON-объекта."""
 
-        if "latitude" not in data or "longitude" not in data:
-            raise ValueError("GeoPosition requires 'latitude' and 'longitude' fields")
-        if isinstance(data["latitude"], (int, float)):
-            latitude = float(data["latitude"])
-        elif isinstance(data["latitude"], str):
-            latitude = parse_lat(data["latitude"])
-        else:
-            raise ValueError(
-                f"Invalid type for 'latitude': expected str or float, got {type(data['latitude'])}"
-            )
-        if isinstance(data["longitude"], (int, float)):
-            longitude = float(data["longitude"])
-        elif isinstance(data["longitude"], str):
-            longitude = parse_lon(data["longitude"])
-        else:
-            raise ValueError(
-                f"Invalid type for 'longitude': expected str or float, got {type(data['longitude'])}"
-            )
+        latitude: float = value_from_dict(
+            data, "latitude", {int: float, float: float, str: parse_lat}
+        )
+        longitude: float = value_from_dict(
+            data,
+            "longitude",
+            {int: float, float: float, str: parse_lon},
+        )
+        # if "latitude" not in data or "longitude" not in data:
+        #     raise ValueError("GeoPosition requires 'latitude' and 'longitude' fields")
+        # if isinstance(data["latitude"], (int, float)):
+        #     latitude = float(data["latitude"])
+        # elif isinstance(data["latitude"], str):
+        #     latitude = parse_lat(data["latitude"])
+        # else:
+        #     raise ValueError(
+        #         f"Invalid type for 'latitude': expected str or float, got {type(data['latitude'])}"
+        #     )
+        # if isinstance(data["longitude"], (int, float)):
+        #     longitude = float(data["longitude"])
+        # elif isinstance(data["longitude"], str):
+        #     longitude = parse_lon(data["longitude"])
+        # else:
+        #     raise ValueError(
+        #         f"Invalid type for 'longitude': expected str or float, got {type(data['longitude'])}"
+        #     )
         data["latitude"] = latitude
         data["longitude"] = longitude
+        # if "elevation" in data:
+        #     if not isinstance(data["elevation"], (int, float)):
+        #         raise ValueError(
+        #             f"Invalid type for 'elevation': expected float, got {type(data['elevation'])}"
+        #         )
+        #     elevation = float(data["elevation"])
+        # else:
+        #     elevation = 0.0
+        elevation: float = value_from_dict(
+            data, "elevation", {int: float, float: float}, default=0.0
+        )
         if "elevation" in data:
-            if not isinstance(data["elevation"], (int, float)):
-                raise ValueError(
-                    f"Invalid type for 'elevation': expected float, got {type(data['elevation'])}"
-                )
-            elevation = float(data["elevation"])
-        else:
-            elevation = 0.0
+            data["elevation"] = elevation
+        place: str = value_from_dict(data, "place", {str: str}, default="")
         if "place" in data:
-            if not isinstance(data["place"], str):
-                raise ValueError(
-                    f"Invalid type for 'place': expected str, got {type(data['place'])}"
-                )
-            place = data["place"]
-        else:
-            place = ""
+            data["place"] = place
+        # if "place" in data:
+        #     if not isinstance(data["place"], str):
+        #         raise ValueError(
+        #             f"Invalid type for 'place': expected str, got {type(data['place'])}"
+        #         )
+        #     place = data["place"]
+        # else:
+        #     place = ""
         return GeoPosition(
             latitude=latitude,
             longitude=longitude,
@@ -97,9 +153,7 @@ class DatetimeLocation:
     def get_planet_position(self, planet: Planet) -> PlanetPosition:
         """Возвращает позицию планеты в виде (долгота, широта, расстояние от Земли)."""
         jd = self.to_julian_day()
-        swe_data, _ = swe.calc_ut(  # pylint: disable=c-extension-no-member
-            jd, planet.code
-        )
+        swe_data, _ = swe.calc_ut(jd, planet.code)
 
         return PlanetPosition.from_swe_data(planet, swe_data)
 

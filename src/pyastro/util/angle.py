@@ -115,26 +115,26 @@ class Angle:
         else:
             self.value = ((self.value + 180) % 360) - 180
 
-    def __add__(self, other: Any) -> Self:
+    def __add__(self, other: Any):
         if isinstance(other, Angle):
             return Angle(self.value + other.value, self.from_0_to_360)
         elif isinstance(other, (int, float)):
             return Angle(self.value + other, self.from_0_to_360)
         return NotImplemented
 
-    def __sub__(self, other: Any) -> Self:
+    def __sub__(self, other: Any):
         if isinstance(other, Angle):
             return Angle(self.value - other.value, self.from_0_to_360)
         elif isinstance(other, (int, float)):
             return Angle(self.value - other, self.from_0_to_360)
         return NotImplemented
 
-    def __mul__(self, other: Any) -> Self:
+    def __mul__(self, other: Any):
         if isinstance(other, (int, float)):
             return Angle(self.value * other, self.from_0_to_360)
         return NotImplemented
 
-    def __truediv__(self, other: Any) -> Self:
+    def __truediv__(self, other: Any):
         if isinstance(other, (int, float)):
             return Angle(self.value / other, self.from_0_to_360)
         return NotImplemented

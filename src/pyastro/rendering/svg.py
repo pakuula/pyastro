@@ -471,8 +471,8 @@ def chart_to_svg(
 
             def cluster_span(angles: list[float]) -> tuple[float, float]:
                 if len(angles) == 1:
-                    a = angles[0] % 360
-                    return a, a
+                    a0 = angles[0] % 360
+                    return a0, a0
                 a = sorted(x % 360 for x in angles)
                 ext = a + [x + 360 for x in a]
                 n = len(a)
@@ -660,7 +660,7 @@ def to_svg(
     else:
         round_chart = svg_chart
 
-    doc = []
+    doc: list[str] = []
     ap = doc.append
 
     width = theme.width + 400 if theme else 1200

@@ -1,7 +1,16 @@
 """Модуль для работы со знаками зодиака."""
+from __future__ import annotations  # для Python ≤ 3.10; в 3.11+ можно опустить
+
 from dataclasses import dataclass
 from enum import Enum
-from typing import Self
+from typing import Optional, Self
+
+# Импорт для аннотаций типов без циклических зависимостей
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    # Это выполняется ТОЛЬКО при статической проверке (mypy/pyright),
+    # в рантайме импорта planet здесь не будет — цикла не возникнет.
+    from .planet import Planet
 
 
 class Element(Enum):
@@ -109,7 +118,7 @@ class ZodiacSign(Enum):
         return self.value[2].modality
 
     @property
-    def ruler(self) -> tuple["Planet"]:
+    def ruler(self) -> tuple["Planet", ...]:
         """Возвращает управителя знака зодиака."""
         from .planet import (
             Planet,
@@ -123,7 +132,7 @@ class ZodiacSign(Enum):
         )
 
     @property
-    def detriment(self) -> tuple["Planet"]:
+    def detriment(self) -> tuple["Planet", ...]:
         """Возвращает планету в изгнании для знака зодиака."""
         from .planet import (
             Planet,
@@ -137,7 +146,7 @@ class ZodiacSign(Enum):
         )
 
     @property
-    def exaltation(self) -> "Planet":
+    def exaltation(self) -> Optional["Planet"]:
         """Возвращает планету в экзальтации для знака зодиака."""
         from .planet import (
             Planet,
@@ -158,7 +167,7 @@ class ZodiacSign(Enum):
         )
 
     @property
-    def fall(self) -> "Planet":
+    def fall(self) -> Optional["Planet"]:
         """Возвращает планету в падении для знака зодиака."""
         from .planet import (
             Planet,

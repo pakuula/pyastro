@@ -2,15 +2,16 @@
 
 from typing import Optional
 from pyastro.astro import Chart
+from pyastro.astro.planet import EssentialDignity, Planet
 from pyastro.rendering import svg
 from pyastro.util import Angle, Latitude, Longitude
 
-
+# pylint: disable=too-many-locals, too-many-statements
 def to_html(
     chart: Chart, svg_chart: Optional[str] = None, svg_path: Optional[str] = None
 ) -> str:
     """Генерация HTML отчёта по гороскопу.
-    
+
     :param chart: Объект Chart с данными гороскопа
     :param svg_chart: SVG диаграмма в виде строки (если None, будет загружена из svg_path или сгенерирована)
     :param svg_path: Путь к SVG файлу (если svg_chart не задан, будет загружен из этого файла)
@@ -103,13 +104,16 @@ def to_html(
     writeln("    <tbody>")
 
     for planet_pos in chart.planet_positions:
+        dignity = planet_pos.planet.dignity(planet_pos.zodiac_sign)
         writeln("        <tr>")
         writeln(f"            <td>{planet_pos.planet.symbol}</td>")
         writeln(f"            <td>{Angle.Lon(planet_pos.longitude)}</td>")
         writeln(f"            <td>{Angle.Lat(planet_pos.latitude)}</td>")
-        writeln(f"            <td>{planet_pos.zodiac_sign.symbol}</td>")
+        writeln(
+            f"            <td>{planet_pos.zodiac_sign.symbol} {dignity.symbol() if dignity is not None else ''}</td>"
+        )
         writeln(f"            <td>{Angle(planet_pos.angle_in_sign())}</td>")
-        writeln(f'            <td>{"Да" if planet_pos.is_retrograde() else "Нет"}</td>')
+        writeln(f'            <td>{"R" if planet_pos.is_retrograde() else ""}</td>')
         if not chart.no_houses:
             writeln(
                 f"            <td>{chart.planet_houses[planet_pos.planet].roman_number}</td>"
@@ -134,7 +138,7 @@ def to_html(
         writeln("        </tr>")
         writeln("    </thead>")
         writeln("    <tbody>")
-    
+
         for house in chart.houses:
             writeln("        <tr>")
             writeln(f"            <td>{house.roman_number}</td>")
@@ -146,7 +150,7 @@ def to_html(
             planet_symbols = " ".join([p.symbol for p in planets_in_house])
             writeln(f"            <td>{planet_symbols}</td>")
             writeln("        </tr>")
-    
+
         writeln("    </tbody>")
         writeln("</table>")
 
@@ -165,9 +169,22 @@ def to_html(
     writeln("    <tbody>")
 
     for aspect in chart.aspects:
+
+        def get_dignity(planet: Planet) -> Optional[EssentialDignity]:
+            pp = chart.planet_position(planet)
+            if pp is None:
+                return None
+            return planet.dignity(pp.zodiac_sign)
+
+        dignity1 = get_dignity(aspect.planet1)
+        dignity2 = get_dignity(aspect.planet2)
         writeln("        <tr>")
-        writeln(f"            <td>{aspect.planet1.symbol}</td>")
-        writeln(f"            <td>{aspect.planet2.symbol}</td>")
+        writeln(
+            f"            <td>{aspect.planet1.symbol} {dignity1.symbol() if dignity1 is not None else ''}</td>"
+        )
+        writeln(
+            f"            <td>{aspect.planet2.symbol} {dignity2.symbol() if dignity2 is not None else ''}</td>"
+        )
         writeln(f"            <td>{aspect.kind.short_name}</td>")
         writeln(f"            <td>{Angle(aspect.angle)}</td>")
         writeln(f"            <td>{Angle(aspect.orb)}</td>")

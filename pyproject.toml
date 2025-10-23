@@ -24,5 +24,15 @@ pyastro-validate = "pyastro.validate:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.pylint.main]
+extension-pkg-allow-list = ["swisseph"]
+
 [tool.pylint."MESSAGES CONTROL"]
 disable = "line-too-long,no-else-return,import-outside-toplevel,superfluous-parens"
+
+[tool.mypy]
+mypy_path = ["typings"]
+
+[tool.pyright]
+# Каталог со стабами; pyright сначала ищет в stubPath.
+stubPath = "typings"

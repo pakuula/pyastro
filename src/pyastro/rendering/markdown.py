@@ -2,6 +2,25 @@
 
 from pyastro.astro import Chart
 from pyastro.util import Angle, Latitude, Longitude
+from .table import Table
+
+
+def render_table(table: Table) -> str:
+    """Генерация markdown таблицы из объекта Table"""
+    out: list[str] = []
+
+    def writeln(s: str):
+        out.append(s)
+
+    # Заголовки
+    writeln("| " + " | ".join(table.headers) + " |")
+    writeln("|" + "|".join(["---"] * len(table.headers)) + "|")
+
+    # Строки
+    for row in table.rows:
+        writeln("| " + " | ".join(str(cell) for cell in row) + " |")
+
+    return "\n".join(out) + "\n"
 
 
 def to_markdown(chart: Chart, svg_path: str) -> str:
@@ -32,7 +51,7 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
     )
     if svg_path:
         para(f"![Карта гороскопа]({svg_path})")
-    
+
     para("## Позиции планет")
 
     headers = [
@@ -50,7 +69,7 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
     writeln("|" + "|".join(["---"] * len(headers)) + "|")
 
     for planet_pos in chart.planet_positions:
-        
+
         planet_data = [
             # f"{planet_pos.planet.name}",
             f"{planet_pos.planet.symbol}",
@@ -81,13 +100,12 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
         ]
         writeln("| " + " | ".join(aspect_data) + " |")
 
-    
     if not chart.no_houses:
         para("## Дома по системе Плацидус")
         headers = ["Дом", "Куспид", "Длина", "Знак", "Угол в знаке", "Планеты"]
         writeln("| " + " | ".join(headers) + " |")
         writeln("|" + "|".join(["---"] * len(headers)) + "|")
-    
+
         for house in chart.houses:
             house_data = [
                 f"{house.roman_number}",
@@ -95,7 +113,10 @@ def to_markdown(chart: Chart, svg_path: str) -> str:
                 f"{Angle(house.length)}",
                 f"{house.zodiac_sign.symbol}",
                 f"{Angle(house.angle_in_sign)}",
-                " ".join(p.symbol for p in chart.house_planets.get(house.house_number, [])) or " ",
+                " ".join(
+                    p.symbol for p in chart.house_planets.get(house.house_number, [])
+                )
+                or " ",
             ]
             writeln("| " + " | ".join(house_data) + " |")
 

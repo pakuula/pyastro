@@ -31,34 +31,6 @@ from .processor import process_data, OutputParams
 logger = logging.getLogger(__name__)
 
 
-def parse_json_input(json_data: dict) -> tuple[str, DatetimeLocation, dict]:
-    """Разбор JSON входных данных в кортеж (имя, DatetimeLocation, доп. данные)"""
-
-    if not "name" in json_data:
-        raise ValueError("JSON должен содержать поле 'name'")
-    name = json_data["name"]
-    if not isinstance(name, str):
-        raise ValueError("JSON поле 'name' должно быть строкой")
-    if not "event" in json_data:
-        raise ValueError("JSON должен содержать поле 'event'")
-    event_data = json_data["event"]
-    if not isinstance(event_data, dict):
-        raise ValueError("JSON поле 'event' должно быть объектом")
-    if not "datetime" in event_data:
-        raise ValueError("JSON должен содержать поле 'datetime'")
-    # dt = parse_json_datetime(event_data["datetime"])
-    # if not "location" in event_data:
-    #     raise ValueError("JSON должен содержать поле 'location'")
-    # loc = parse_json_location(event_data["location"])
-    dt = Datetime.from_dict(event_data["datetime"])
-    loc = GeoPosition.from_dict(event_data["location"])
-    extra = {k: v for k, v in json_data.items() if k not in ("name", "event")}
-    extra.update(
-        {k: v for k, v in event_data.items() if k not in ("datetime", "location")}
-    )
-    return name, DatetimeLocation(datetime=dt, location=loc), extra
-
-
 def parse_json_datetime(dt_json: dict) -> datetime:
     """Разбор JSON datetime в объект datetime"""
 
@@ -76,26 +48,39 @@ def parse_json_datetime(dt_json: dict) -> datetime:
 
 
 def datetime_from_input(
-    date_input: str | date, time_str: str, tz_str: str, date_only: bool = False
+    date_input: str | date | datetime,
+    time_str: Optional[str],
+    tz_str: Optional[str],
+    date_only: bool = False,
 ) -> datetime:
     """Разбор строки даты, времени и часового пояса в объект datetime"""
-    try:
-        if isinstance(date_input, str):
-            date_val = datetime.fromisoformat(date_input).date()
-        else:
-            date_val = date_input
-    except ValueError as e:
-        raise ValueError(
-            f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}"
-        ) from e
+    if isinstance(date_input, str):
+        try:
 
-    if date_only and (not time_str) and (not tz_str):
+            date_val = datetime.fromisoformat(date_input).date()
+        except ValueError as e:
+            raise ValueError(
+                f"Неверный формат даты, ожидается ISO 8601 (например, 2025-30-09): {date_input}"
+            ) from e
+    else:
+        date_val = date_input
+
+    if date_only:
+        if time_str or tz_str:
+            logger.warning(
+                "Игнорирование времени и часового пояса, так как установлен date_only=True"
+            )
         # если указана только дата, без времени и часового пояса, возвращаем дату с полуднем и UTC
         return datetime.combine(date_val, time(12, 0), tzinfo=ZoneInfo("UTC"))
-    else:  # pylint: disable=no-else-return
-        time_val = parse_time_string(time_str)
-        tzinfo_val = parse_timezone(tz_str)
-        return datetime.combine(date_val, time_val, tzinfo=tzinfo_val)
+    if time_str is None:
+        raise ValueError("Если date_only=False, то time не может быть None")
+    if tz_str is None:
+        raise ValueError("Если date_only=False, то time_zone не может быть None")
+
+    time_val = parse_time_string(time_str) if time_str else time(12, 0)
+    tzinfo_val = parse_timezone(tz_str) if tz_str else ZoneInfo("UTC")
+
+    return datetime.combine(date_val, time_val, tzinfo=tzinfo_val)
 
 
 def parse_json_location(loc_json: dict) -> GeoPosition:
@@ -163,10 +148,21 @@ class Datetime:
     :param date_only: если True, то время и часовой пояс игнорируются
     """
 
-    date: str  # YYYY-MM-DD
-    time: str  # HH:MM:SS
-    time_zone: str  # e.g. Europe/Moscow or -08:00
+    date: str | date | datetime  # YYYY-MM-DD
+    time: Optional[str]  # HH:MM:SS или None если date_only=True
+    time_zone: Optional[
+        str
+    ]  # "Europe/Moscow" или "-08:00" или None если date_only=True
     date_only: bool = False
+
+    def __post_init__(self):
+        if not self.date_only:
+            if self.time is None:
+                raise ValueError("Если date_only=False, то time не может быть None")
+            if self.time_zone is None:
+                raise ValueError(
+                    "Если date_only=False, то time_zone не может быть None"
+                )
 
     @staticmethod
     def from_dict(data: dict) -> "Datetime":
@@ -204,6 +200,7 @@ class Datetime:
             time_zone,
             date_only,
         )
+
         return Datetime(
             date=date_val, time=time_val, time_zone=time_zone, date_only=date_only
         )
@@ -259,8 +256,9 @@ class JsonInput:
         event = Event.from_dict(data["event"])
         return JsonInput(name=data["name"], event=event)
 
+
 # pylint: disable=too-many-locals,too-many-statements,too-many-branches,too-many-return-statements
-def main():
+def main() -> None:
     """
     Главная функция для запуска астрологических расчётов и генерации графики.
 
@@ -420,7 +418,7 @@ def main():
         print("Ошибка: нужно указать имя человека (-n) или входной файл (-i)")
         return
     if args.name:
-        required = [args.location, args.date]
+        required = (args.location, args.date)
         if not all(required):
             print(
                 "Ошибка: при указании имени (-n) нужно также указать местоположение (-l) и дату (-d)"

@@ -1,3 +1,5 @@
+"""Обработка астрологических данных и генерация отчётов в разные форматы."""
+
 from dataclasses import dataclass
 import logging
 import os.path
@@ -31,15 +33,18 @@ _ROMAN = {
 
 
 def int_to_subscript(n: int) -> str:
+    """Преобразует целое число в строку с нижними индексами (0-29)."""
     n = n % 30
     return str(n).translate(_SUB_MAP)
 
 
 def to_roman(n: int) -> str:
+    """Преобразует целое число в римскую цифру (1-12)."""
     return _ROMAN.get(n, str(n))
 
 
 def print_chart_info(chart: Chart):
+    """Выводит информацию об астрологической карте в консоль."""
     print(f"Астрологическая карта для: {chart.name}")
     dt_loc = chart.dt_loc
     print(f"Дата и время: {dt_loc.datetime.isoformat()}")
@@ -84,6 +89,7 @@ def print_chart_info(chart: Chart):
 
 @dataclass
 class OutputParams:
+    """Параметры вывода астрологической карты в разные форматы."""
     png_path: Optional[str] = None
     svg_doc_path: Optional[str] = None
     svg_chart_path: Optional[str] = None
@@ -118,7 +124,7 @@ def process_data(
         angle=0,
     )
     svg_doc = svg.to_svg(chart, svg_chart, svg_theme)
-    
+
     logger.debug("Output params: %s", output_params)
     if output_params.svg_chart_path:
         with open(output_params.svg_chart_path, "w", encoding="utf-8") as f:
@@ -138,13 +144,13 @@ def process_data(
             mdown = markdown.to_markdown(chart, svg_path=os.path.basename(svg_path))
             f.write(mdown)
         logger.info("Markdown сохранён в %s", output_params.mdown_path)
-    
+
     if output_params.html_path:
         html_doc = html.to_html(chart, svg_chart=svg_chart)
         with open(output_params.html_path, "w", encoding="utf-8") as f:
             f.write(html_doc)
         logger.info("HTML сохранён в %s", output_params.html_path)
-        
+
     if output_params.png_path:
         try:
             png.export_as_png(svg_doc, output_params.png_path, throw_if_error=True)
@@ -153,15 +159,16 @@ def process_data(
             logger.error("Ошибка генерации PNG: %s", e)
 
     if output_params.pdf_path:
-        with NamedTemporaryFile(
-            delete=True, suffix=".svg"
-        ) as tmp_svg_file, NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file:
+        with (
+            NamedTemporaryFile(delete=True, suffix=".svg") as tmp_svg_file,
+            NamedTemporaryFile(delete=True, suffix=".md") as tmp_md_file,
+        ):
             tmp_svg_file.write(svg_chart.encode("utf-8"))
             tmp_svg_file.flush()
             # tmp_svg_file.close()
 
             mdown = markdown.to_markdown(chart, svg_path=tmp_svg_file.name)
-            mdown = mdown.replace("⯓", "♇") # в шрифте FreeSerif нет символа ⯓
+            mdown = mdown.replace("⯓", "♇")  # в шрифте FreeSerif нет символа ⯓
             tmp_md_file.write(mdown.encode("utf-8"))
             tmp_md_file.flush()
             # tmp_md_file.close()
@@ -169,4 +176,3 @@ def process_data(
             pdf.export_as_pdf(tmp_md_file.name, output_params.pdf_path)
         # pdf.to_pdf_weasy(chart, svg_chart, output_params.pdf_path)
         logger.info("PDF сохранён в %s", output_params.pdf_path)
-        

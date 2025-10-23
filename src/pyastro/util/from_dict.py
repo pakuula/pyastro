@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Callable, get_args, get_origin
+from typing import Any, Callable, Optional, get_args, get_origin
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -7,7 +7,7 @@ logger.setLevel(logging.DEBUG)
 def from_dict_dataclass[T](
     clazz: type[T],
     data: dict,
-    special_fields: dict[str, Callable[[str, any], Any]] = None,
+    special_fields: Optional[dict[str, Callable[[str, Any], Any]]] = None,
 ) -> T:
     """Создает тему из JSON-объекта."""
     obj = clazz.__new__(clazz)  # __init__ не вызван

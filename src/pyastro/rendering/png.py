@@ -1,3 +1,4 @@
+"""Генерация PNG изображения натальной карты из SVG документа."""
 import subprocess
 import logging
 import shutil
@@ -36,8 +37,7 @@ def export_as_png(svg_doc: str, png_path: str, throw_if_error=False):
         if proc.returncode != 0:
             if throw_if_error:
                 raise ValueError(f"Ошибка генерации PNG с помощью rsvg-convert: {proc.stderr.strip()}")
-            else:
-                logger.error(
-                        "Ошибка генерации PNG с помощью rsvg-convert: %s",
-                        proc.stderr.strip(),
-                    )
+            logger.error(
+                    "Ошибка генерации PNG с помощью rsvg-convert: %s",
+                    proc.stderr.strip(),
+                )

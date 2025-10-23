@@ -1,18 +1,41 @@
 """Модуль для работы с планетами и их позициями в гороскопе."""
+
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
-from typing import Self
 
 from .sign import ZodiacSign
 
 
 class EssentialDignity(Enum):
-    """Основные достоинства планет."""
+    """Основные достоинства планет.
+
+     Значения:
+        DOMICILE: обитель
+        EXALTATION: экзальтация
+        DETRIMENT: изгнание
+        FALL: падение
+
+    Метод symbol() возвращает Unicode глиф, символизирующий данное достоинство.
+    """
 
     DOMICILE = 0  # обитель
     EXALTATION = 1  # экзальтация
     DETRIMENT = 2  # изгнание
     FALL = 3  # падение
+
+    def symbol(self) -> str:
+        """Возвращает символ достоинства."""
+        return DIGNITY_SYMBOLS[self]
+
+
+DIGNITY_SYMBOLS = {
+    EssentialDignity.EXALTATION: "⤴️",
+    EssentialDignity.FALL: "⤵️",
+    EssentialDignity.DOMICILE: "🏠",
+    EssentialDignity.DETRIMENT: "🔒",
+    None: "",
+}
 
 
 @dataclass
@@ -21,16 +44,15 @@ class PlanetSpec:
 
     code: int
     symbol: str
-    domicile: tuple[ZodiacSign] | None = (
-        None  # обитель, может быть два знака или None для малых планет
-    )
-    exaltation: ZodiacSign | None = (
-        None  # экзальтация, один знак или None для малых планет
-    )
-    detriment: tuple[ZodiacSign] | None = (
-        None  # изгнание, может быть два знака или None для малых планет
-    )
-    fall: ZodiacSign | None = None  # падение, один знак или None для малых планет
+    # обитель, может быть один или два знака или None для малых планет
+    domicile: tuple[ZodiacSign, ...] | None = None
+    # экзальтация, один знак или None для малых планет
+    exaltation: ZodiacSign | None = None
+    # изгнание, может быть один или два знака или None для малых планет
+    detriment: tuple[ZodiacSign, ...] | None = None
+    # падение, один знак или None для малых планет
+    fall: ZodiacSign | None = None
+
     #     Солнце (Sun)	Лев (Leo)	Овен (Aries)	Водолей (Aquarius)	Весы (Libra)
     # Луна (Moon)	Рак (Cancer)	Телец (Taurus)	Козерог (Capricorn)	Скорпион (Scorpio)
     # Меркурий (Mercury)	Близнецы (Gemini), Дева (Virgo)	Дева (Virgo)	Стрелец (Sagittarius), Рыбы (Pisces)	Рыбы (Pisces)
@@ -250,7 +272,7 @@ class Planet(Enum):
         return self.value.symbol
 
     @property
-    def domicile(self) -> tuple[ZodiacSign] | None:
+    def domicile(self) -> tuple[ZodiacSign, ...] | None:
         """Возвращает знак(и) зодиака, в которых планета находится в обители."""
         return self.value.domicile
 
@@ -260,12 +282,12 @@ class Planet(Enum):
         return self.value.exaltation
 
     @property
-    def detriment(self) -> tuple[ZodiacSign] | None:
+    def detriment(self) -> tuple[ZodiacSign, ...] | None:
         """Возвращает знак(и) зодиака, в которых планета находится в падении."""
         return self.value.detriment
 
     @property
-    def fall(self) -> ZodiacSign:
+    def fall(self) -> ZodiacSign | None:
         """Возвращает знак зодиака, в котором планета находится в падении."""
         return self.value.fall
 
@@ -322,7 +344,7 @@ class PlanetPosition:
             raise ValueError(f"Distance cannot be negative: {self.distance}")
 
     @staticmethod
-    def from_swe_data(planet: Planet, swe_data: list[float]) -> Self:
+    def from_swe_data(planet: Planet, swe_data: Sequence[float]) -> "PlanetPosition":
         """Создает PlanetPosition из данных, возвращаемых Swiss Ephemeris."""
         latitude = swe_data[1] % 90 if swe_data[1] >= 0 else -(abs(swe_data[1]) % 90)
         return PlanetPosition(
@@ -357,7 +379,10 @@ class PlanetPosition:
     @property
     def is_domicile(self) -> bool:
         """Возвращает True, если планета в обители."""
-        return self.zodiac_sign in self.planet.domicile
+        return (
+            self.planet.domicile is not None
+            and self.zodiac_sign in self.planet.domicile
+        )
 
     @property
     def is_exaltation(self) -> bool:
@@ -367,7 +392,10 @@ class PlanetPosition:
     @property
     def is_detriment(self) -> bool:
         """Возвращает True, если планета в падении."""
-        return self.zodiac_sign in self.planet.detriment
+        return (
+            self.planet.detriment is not None
+            and self.zodiac_sign in self.planet.detriment
+        )
 
     @property
     def is_fall(self) -> bool:
