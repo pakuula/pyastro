@@ -132,18 +132,20 @@ def _distribute_cluster(
         and theme.allow_radial_stack
         and theme.max_planet_stack_layers > 1
     )
+    radii = (base_r, max_allowed_r)
     result = []
     for idx, pp in enumerate(cluster):
         ang = (base_angle + offsets[idx]) % 360
-        rad = base_r
-        if need_radial:
-            # Alternate inner/outer slight offsets to disentangle subscripts
-            layer = idx % 2  # 0,1
-            direction = -1 if layer == 0 else 1
-            rad = min(
-                max(base_r + direction * theme.planet_stack_spacing_px * 0.6, 0),
-                max_allowed_r,
-            )
+        # rad = base_r
+        # if need_radial:
+        #     # Alternate inner/outer slight offsets to disentangle subscripts
+        #     layer = idx % 2  # 0,1
+        #     direction = -1 if layer == 0 else 1
+        #     rad = min(
+        #         max(base_r + direction * theme.planet_stack_spacing_px * 0.6, 0),
+        #         max_allowed_r,
+        #     )
+        rad = radii[idx % len(radii)]
         result.append((pp.planet, ang, min(rad, max_allowed_r)))
     return result
 
@@ -156,6 +158,7 @@ def _layout_planets(
     # rotation: float = 0.0,
 ) -> dict[Planet, tuple[float, float]]:
     clusters = _cluster_planet_positions(chart, theme.min_planet_separation_deg)
+    logger.debug("Planet clusters: %s", [ [p.planet.name for p in c] for c in clusters ])
     layout: dict[Planet, tuple[float, float]] = {}
     max_allowed = zodiac_r_inner - theme.planet_font_size * 0.65
     for cluster in clusters:
