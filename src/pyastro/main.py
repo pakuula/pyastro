@@ -131,11 +131,11 @@ def location_from_str(
     )
 
 
-def _init_logging():
+def _init_logging(level: int = logging.INFO) -> None:
     logging.basicConfig(
-        level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s"
+        level=level, format="%(levelname)s:%(name)s: %(message)s"
     )
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)
 
 
 @dataclass
@@ -410,6 +410,7 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.verbose:
+        logging.basicConfig(level=logging.DEBUG, force=True)
         logger.setLevel(logging.DEBUG)
         logger.debug("Включён подробный вывод")
     svg_theme = None
