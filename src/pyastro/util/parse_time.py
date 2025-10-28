@@ -56,17 +56,14 @@ def parse_timezone(tz_str: str) -> zoneinfo.ZoneInfo | datetime.timezone:
             hours_offset, minutes_offset = map(int, tz_str.split(":"))
             sign = 1 if hours_offset >= 0 else -1
             tzinfo = datetime.timezone(
-                offset=datetime.timedelta(
-                    hours=hours_offset, minutes=sign * minutes_offset
-                ),
-                name=f"GMT{'+' if hours_offset > 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
+                offset=datetime.timedelta(hours=hours_offset, minutes=sign*minutes_offset),
+                name=f"GMT{'+' if hours_offset >= 0 else '-'}{abs(hours_offset):02d}:{minutes_offset:02d}",
             )
         else:
             tzinfo = zoneinfo.ZoneInfo(tz_str)
     except Exception as e:
         raise ValueError(f"Неверный часовой пояс: {tz_str}: {e}") from e
     return tzinfo
-
 
 def datetime_from_dict(data: dict) -> datetime.datetime:
     """Разбор JSON datetime в объект datetime"""
