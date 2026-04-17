@@ -1,13 +1,12 @@
 from dataclasses import dataclass
 import re
-import sys
 from typing import Any, Optional, Self
 
 _HEMI = {'n': +1, 's': -1, 'e': +1, 'w': -1}
 
 class CoordError(ValueError):
     """Ошибка при разборе координаты (широты/долготы)."""
-    pass
+    pass # pylint: disable=unnecessary-pass
 
 def _parse_angle_core(text: str) -> tuple[float, Optional[int]]:
     """
@@ -102,6 +101,21 @@ class Angle:
 
     :param value: значение угла в градусах
     :param from_0_to_360: если True, значение всегда от 0 до 360, иначе от -180 до +180
+    
+    Класс Angle поддерживает арифметические операции +, -, *, / с другими объектами Angle и числами (int, float).
+    
+    Форматирование через __format__ поддерживает следующие спецификаторы:
+    - Пустой спецификатор: возвращает строку в формате ±DD°MM'SS".
+    - Спецификатор с 'm': возвращает строку в формате ±DD°MM.mmm', применяя форматирование к минутам.
+    - Спецификатор с 'g': возвращает строку в формате ±DD.ggg°, применяя форматирование к градусам
+    - Прочий непустой спецификатор применяется к секундам.
+    
+    Примеры форматирования:
+    - Angle(23.5125) -> "23°30'45"
+    - Angle(-23.5125, from_0_to_360=False) -> "-23°30'45"
+    - Angle(23.5125):".2f" -> "23°30'45.00"
+    - Angle(23.5125):"m.1f" -> "23°30.8'"
+    - Angle(23.5125):"g.3f" -> "23.513°"
     """
 
     value: float  # градусы
@@ -143,23 +157,52 @@ class Angle:
         return f"Angle({self.value}, from_0_to_360={self.from_0_to_360})"
 
     def __format__(self, format_spec: str) -> str:
+        """
+        Если format_spec пустой, возвращает строку в формате ±DD°MM'SS".
+        
+        Если format_spec содержит `m`, то удаляем `m` из format_spec и выводим в формате ±DD°MM.mmm',
+        применив получившийся format_spec к значению минут как float.
+
+        Если format_spec содержит `g`, то удаляем `g` из format_spec и выводим в формате ±DD.ggg°,
+        применив получившийся format_spec к значению градусов как float.
+        """        
+        if 'g' in format_spec:
+            format_spec = format_spec.replace('g', '')
+            degree = float(self.value)
+            if self.from_0_to_360:
+                sign = ""
+            else:
+                sign = "-" if degree < 0 else ""
+                degree = abs(degree)
+            return f"{sign}{degree:{format_spec}}°"
+        if 'm' in format_spec:
+            format_spec = format_spec.replace('m', '')
+            if self.from_0_to_360:
+                sign = ""
+                value = self.value
+            else:
+                sign = "-" if self.value < 0 else ""
+                value = abs(self.value)
+            degree = int(value)
+            minute = (value - degree) * 60
+            return f"{sign}{degree}°{minute:{format_spec}}'"
         if self.from_0_to_360:
             sign = ""
-            deg = int(self.value)
-            min = int((self.value - deg) * 60)
-            sec = ((self.value - deg) * 60 - min) * 60
+            degree = int(self.value)
+            minute = int((self.value - degree) * 60)
+            second = ((self.value - degree) * 60 - minute) * 60
         else:
             sign = "-" if self.value < 0 else ""
             abs_value = abs(self.value)
-            deg = int(abs_value)
-            min = int((abs_value - deg) * 60)
-            sec = ((abs_value - deg) * 60 - min) * 60
+            degree = int(abs_value)
+            minute = int((abs_value - degree) * 60)
+            second = ((abs_value - degree) * 60 - minute) * 60
         if format_spec:
             # Форматирование с плавающей точкой для секунд
-            sec_str = format(sec, format_spec) if format_spec else f"{sec:.0f}"
+            sec_str = format(second, format_spec) if format_spec else f"{second:.0f}"
         else:
-            sec_str = f"{round(sec):02d}" # Округление до целого числа секунд
-        return f"{sign}{deg}°{min:02d}'{sec_str}\""
+            sec_str = f"{round(second):02d}" # Округление до целого числа секунд
+        return f"{sign}{degree}°{minute:02d}'{sec_str}\""
 
     @classmethod
     def from_str(cls, angle_str: str, from_0_to_360: bool = False) -> Self:
@@ -179,17 +222,17 @@ class Angle:
 
         try:
             deg_part, rest = angle_str.split("°", 1)
-            deg = int(deg_part.strip())
+            degree = int(deg_part.strip())
             min_part, sec_part = rest.split("'", 1)
-            min = int(min_part.strip())
-            sec = float(sec_part.strip().rstrip('"'))
+            minute = int(min_part.strip())
+            second = float(sec_part.strip().rstrip('"'))
         except Exception as e:
             raise ValueError(f"Invalid angle format: {angle_str}") from e
 
-        if not (0 <= deg <= 360 and 0 <= min < 60 and 0 <= sec < 60):
+        if not (0 <= degree <= 360 and 0 <= minute < 60 and 0 <= second < 60):
             raise ValueError(f"Angle components out of range in: {angle_str}")
 
-        total_degrees = sign * (deg + min / 60 + sec / 3600)
+        total_degrees = sign * (degree + minute / 60 + second / 3600)
         from_0_to_360 = from_0_to_360 or total_degrees >= 0
         return cls(total_degrees, from_0_to_360)
 
@@ -212,6 +255,19 @@ class Angle:
     def Lon(cls, longitude: float) -> Self:
         """Создает Angle из долготы в градусах."""
         return cls(longitude, True)
+
+    def round_to_minutes(self) -> Self:
+        """Округляет угол до ближайшей минуты."""
+        if self.from_0_to_360:
+            value = round(self.value * 60) / 60
+        else:
+            value = round(self.value * 60) / 60
+        return type(self)(value, self.from_0_to_360)
+
+    def round_to_degrees(self) -> Self:
+        """Округляет угол до ближайшего градуса."""
+        value = round(self.value)
+        return type(self)(value, self.from_0_to_360)
 
 # Удобные обёртки
 def parse_lat(text: str) -> float:

@@ -304,7 +304,7 @@ class Planet(Enum):
         """Возвращает True, если планета - Южный узел."""
         return self == Planet.SOUTH_NODE
 
-
+# Семь планет классической астрологии
 CLASSIC_PLANETS = (
     Planet.SUN,
     Planet.MOON,
@@ -315,7 +315,9 @@ CLASSIC_PLANETS = (
     Planet.SATURN,
 )
 
+# Все планеты, включая Уран, Нептун и Плутон
 NEW_PLANETS = CLASSIC_PLANETS + (Planet.URANUS, Planet.NEPTUNE, Planet.PLUTO)
+# Все планеты плюс лунные узлы
 NEW_PLANETS_WITH_NODES = NEW_PLANETS + (Planet.NORTH_NODE, Planet.SOUTH_NODE)
 
 

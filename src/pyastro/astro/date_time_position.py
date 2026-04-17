@@ -11,7 +11,7 @@ from pyastro.util.angle import parse_lat, parse_lon
 from pyastro.util.parse_time import datetime_from_dict
 
 from .houses import HousePosition, HouseSystem
-from .planet import NEW_PLANETS_WITH_NODES, Planet, PlanetPosition
+from .planet import NEW_PLANETS, NEW_PLANETS_WITH_NODES, Planet, PlanetPosition
 
 
 def value_from_dict[T](
@@ -162,7 +162,8 @@ class DatetimeLocation:
     ) -> list[PlanetPosition]:
         """Возвращает позиции всех планет."""
         if planets is None:
-            planets = NEW_PLANETS_WITH_NODES
+            # planets = NEW_PLANETS_WITH_NODES
+            planets = NEW_PLANETS
         return [self.get_planet_position(planet) for planet in planets]
 
     def get_house_cusps(

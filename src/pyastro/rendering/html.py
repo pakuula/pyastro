@@ -104,7 +104,7 @@ def to_html(
     writeln("    <tbody>")
 
     for planet_pos in chart.planet_positions:
-        dignity = planet_pos.planet.dignity(planet_pos.zodiac_sign)
+        dignity = planet_pos.dignity
         writeln("        <tr>")
         writeln(f"            <td>{planet_pos.planet.symbol}</td>")
         writeln(f"            <td>{Angle.Lon(planet_pos.longitude)}</td>")

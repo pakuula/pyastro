@@ -720,13 +720,16 @@ def to_svg(
     for pp in sorted(chart.planet_positions, key=lambda p: p.planet.code):
         sign = pp.zodiac_sign
         angle = pp.angle_in_sign()
+        dignity = pp.dignity
+        
         retro = "R" if pp.is_retrograde() else ""
         ap(
             f'<g transform="translate(0,{start_y})">'
             f'<text font-size="18">{pp.planet.symbol}</text>'
             f'<text class="text" font-size="18" x="25">{retro}</text>'
-            f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
-            f'<text font-size="18" x="140">{sign.symbol}</text>'
+            f'<text font-size="18" x="40">{dignity.symbol() if dignity is not None else ''}</text>'
+            f'<text class="text" font-size="18" x="70">{Angle(angle):m02.0f}</text>'
+            f'<text font-size="18" x="160">{sign.symbol}</text>'
             f"</g>"
         )
         start_y += line_h
@@ -741,8 +744,8 @@ def to_svg(
         ap(
             f'<g transform="translate(0,{start_y})">'
             f'<text font-size="18">{house_name}</text>'
-            f'<text class="text" font-size="18" x="50">{Angle(angle)}</text>'
-            f'<text font-size="18" x="140">{sign.symbol}</text>'
+            f'<text class="text" font-size="18" x="70">{Angle(angle):m02.0f}</text>'
+            f'<text font-size="18" x="160">{sign.symbol}</text>'
             f"</g>"
         )
         start_y += line_h
